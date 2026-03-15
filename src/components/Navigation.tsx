@@ -8,6 +8,7 @@ import { CandlestickChart, BriefcaseBusiness, LineChart, ShieldCheck, ScanSearch
 export default function Navigation() {
     const pathname = usePathname();
     const [isBuildingDayCache, setIsBuildingDayCache] = useState(false);
+    const [isBackfillingYear, setIsBackfillingYear] = useState(false);
     const [buildMessage, setBuildMessage] = useState('');
 
     const buildDayFoundation = async () => {
@@ -40,6 +41,39 @@ export default function Navigation() {
             setBuildMessage('Network error');
         } finally {
             setIsBuildingDayCache(false);
+        }
+    };
+
+    const buildYearFoundation = async () => {
+        setIsBackfillingYear(true);
+        setBuildMessage('');
+
+        try {
+            const res = await fetch('/api/stocks/research/foundation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    interval: 'day',
+                    lookbackDays: 365,
+                    category: 'all',
+                    maxSymbols: 250,
+                    refresh: false,
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                setBuildMessage(data.error || '365d backfill failed');
+                return;
+            }
+
+            setBuildMessage(`365d cache ready: ${data.fetched || 0} fetched, ${data.cached || 0} cached, ${data.failed || 0} failed`);
+            window.setTimeout(() => setBuildMessage(''), 5000);
+        } catch (error) {
+            console.error('Failed to build 365d foundation from nav', error);
+            setBuildMessage('Network error');
+        } finally {
+            setIsBackfillingYear(false);
         }
     };
 
@@ -155,6 +189,15 @@ export default function Navigation() {
                 >
                     {isBuildingDayCache ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
                     Build Day Cache
+                </button>
+                <button
+                    type="button"
+                    onClick={buildYearFoundation}
+                    disabled={isBackfillingYear}
+                    className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-4 py-2 text-xs font-semibold text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {isBackfillingYear ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+                    Backfill 365d
                 </button>
                 {buildMessage ? <span className="text-xs text-slate-300">{buildMessage}</span> : null}
             </div>

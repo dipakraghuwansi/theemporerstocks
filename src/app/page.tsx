@@ -6,6 +6,7 @@ import { ArrowRight, BarChart3, BriefcaseBusiness, Database, Microscope, Refresh
 
 export default function HomePage() {
   const [isBuildingDayCache, setIsBuildingDayCache] = useState(false);
+  const [isBackfillingYear, setIsBackfillingYear] = useState(false);
   const [cacheMessage, setCacheMessage] = useState("");
 
   const buildDayFoundation = async () => {
@@ -37,6 +38,38 @@ export default function HomePage() {
       setCacheMessage("Network error while building day cache.");
     } finally {
       setIsBuildingDayCache(false);
+    }
+  };
+
+  const backfillYearFoundation = async () => {
+    setIsBackfillingYear(true);
+    setCacheMessage("");
+
+    try {
+      const res = await fetch("/api/stocks/research/foundation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interval: "day",
+          lookbackDays: 365,
+          category: "all",
+          maxSymbols: 250,
+          refresh: false,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCacheMessage(data.error || "Failed to backfill 365-day cache.");
+        return;
+      }
+
+      setCacheMessage(`365d cache ready: ${data.fetched || 0} fetched, ${data.cached || 0} cached, ${data.failed || 0} failed`);
+    } catch (error) {
+      console.error("Failed to backfill 365d foundation from home page", error);
+      setCacheMessage("Network error while building 365-day cache.");
+    } finally {
+      setIsBackfillingYear(false);
     }
   };
 
@@ -91,6 +124,15 @@ export default function HomePage() {
           >
             {isBuildingDayCache ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             Build Day Cache
+          </button>
+          <button
+            type="button"
+            onClick={backfillYearFoundation}
+            disabled={isBackfillingYear}
+            className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-3 font-semibold text-sky-200 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBackfillingYear ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            Backfill 365d Universe
           </button>
           <Link
             href="/trade-tracker"

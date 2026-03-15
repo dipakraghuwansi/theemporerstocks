@@ -13,6 +13,20 @@ type ResearchPayload = {
   error?: string;
 };
 
+type FoundationStatusPayload = {
+  success?: boolean;
+  interval: string;
+  cacheSummary?: {
+    interval: string;
+    datasetCount: number;
+    totalBytes: number;
+    totalBytesFormatted: string;
+    manifestGeneratedAt: string | null;
+    lookbackDays: number | null;
+    requestedSymbols: number;
+  };
+};
+
 type ActionState = "idle" | "loading";
 
 function summarizeLabels(labels: ScreenOutcomeLabel[]) {
@@ -47,10 +61,12 @@ export default function ResearchPage() {
   const [payload, setPayload] = useState<ResearchPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionState, setActionState] = useState<Record<string, ActionState>>({
+    day365: "idle",
     minute: "idle",
     manifest: "idle",
   });
   const [actionMessage, setActionMessage] = useState("");
+  const [dayCacheStatus, setDayCacheStatus] = useState<FoundationStatusPayload["cacheSummary"] | null>(null);
 
   const loadManifest = async () => {
     setLoading(true);
@@ -70,13 +86,39 @@ export default function ResearchPage() {
     loadManifest();
   }, []);
 
-  const runAction = async (kind: "minute" | "manifest") => {
+  useEffect(() => {
+    const loadDayStatus = async () => {
+      try {
+        const res = await fetch("/api/stocks/research/foundation?interval=day", { cache: "no-store" });
+        const data: FoundationStatusPayload = await res.json();
+        setDayCacheStatus(data.cacheSummary || null);
+      } catch (error) {
+        console.error("Failed to load day cache status", error);
+      }
+    };
+
+    loadDayStatus();
+  }, []);
+
+  const runAction = async (kind: "day365" | "minute" | "manifest") => {
     setActionState((current) => ({ ...current, [kind]: "loading" }));
     setActionMessage("");
 
     try {
       const res =
-        kind === "minute"
+        kind === "day365"
+          ? await fetch("/api/stocks/research/foundation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                interval: "day",
+                lookbackDays: 365,
+                category: "all",
+                maxSymbols: 250,
+                refresh: false,
+              }),
+            })
+          : kind === "minute"
           ? await fetch("/api/stocks/research/foundation", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -97,11 +139,16 @@ export default function ResearchPage() {
       }
 
       setActionMessage(
-        kind === "minute"
+        kind === "day365"
+          ? `365d day cache ready: ${data.fetched || 0} fetched, ${data.cached || 0} cached, ${data.failed || 0} failed.`
+          : kind === "minute"
           ? `Minute cache ready: ${data.fetched || 0} fetched, ${data.cached || 0} cached, ${data.failed || 0} failed.`
           : `Research manifest rebuilt at ${new Date(data.manifest?.generatedAt || Date.now()).toLocaleString()}.`
       );
       await loadManifest();
+      const foundationRes = await fetch("/api/stocks/research/foundation?interval=day", { cache: "no-store" });
+      const foundationData: FoundationStatusPayload = await foundationRes.json();
+      setDayCacheStatus(foundationData.cacheSummary || null);
     } catch (error) {
       console.error(`Failed to run ${kind} action`, error);
       setActionMessage("Network error while running the action.");
@@ -191,6 +238,15 @@ export default function ResearchPage() {
         <div className="mt-8 flex flex-wrap gap-3">
           <button
             type="button"
+            onClick={() => runAction("day365")}
+            disabled={actionState.day365 === "loading"}
+            className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/20 disabled:opacity-60"
+          >
+            {actionState.day365 === "loading" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            Backfill 365d Universe
+          </button>
+          <button
+            type="button"
             onClick={() => runAction("minute")}
             disabled={actionState.minute === "loading"}
             className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-60"
@@ -234,6 +290,16 @@ export default function ResearchPage() {
               <SummaryCard label="Labels" value={String(manifest?.labels.length || 0)} />
               <SummaryCard label="No Lookahead" value={manifest?.config.noLookaheadValidation ? "Enabled" : "Off"} />
             </div>
+
+            <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6">
+              <h2 className="text-lg font-bold">Local Historical Cache</h2>
+              <div className="mt-4 grid gap-4 md:grid-cols-4">
+                <SummaryCard label="Day Datasets" value={String(dayCacheStatus?.datasetCount || 0)} />
+                <SummaryCard label="Disk Size" value={dayCacheStatus?.totalBytesFormatted || "--"} />
+                <SummaryCard label="Lookback" value={dayCacheStatus?.lookbackDays ? `${dayCacheStatus.lookbackDays}d` : "--"} />
+                <SummaryCard label="Manifest Symbols" value={String(dayCacheStatus?.requestedSymbols || 0)} />
+              </div>
+            </section>
 
             <section className="mt-10 rounded-3xl border border-white/10 bg-white/5 p-6">
               <h2 className="text-lg font-bold">Intraday minute validation</h2>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getHistoricalCacheSummary } from '@/lib/historical/cache';
 import { buildHistoricalDataset, getHistoricalFoundationStatus } from '@/lib/historical/foundation';
 import { HistoricalBuildRequest, HistoricalInterval } from '@/lib/historical/types';
 
@@ -19,11 +20,13 @@ export async function GET(request: NextRequest) {
   try {
     const interval = toInterval(request.nextUrl.searchParams.get('interval'));
     const manifest = getHistoricalFoundationStatus(interval);
+    const cacheSummary = getHistoricalCacheSummary(interval);
 
     return NextResponse.json({
       success: true,
       interval,
       manifest,
+      cacheSummary,
       notes: [
         'Historical dataset pulls are cache-first and only fetch missing or stale symbol ranges unless refresh=true.',
         'The fetch queue is paced to stay under Kite historical API rate limits.',
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       ...result,
+      cacheSummary: getHistoricalCacheSummary(buildRequest.interval),
       notes: [
         'The builder uses one shared instruments fetch, then reads from local candle cache before making any Kite historical requests.',
         'Historical requests are serialized and paced to respect documented Kite rate limits and reduce the chance of 429 responses.',
