@@ -1,9 +1,45 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, BarChart3, BriefcaseBusiness, ScanSearch } from "lucide-react";
+import { ArrowRight, BarChart3, BriefcaseBusiness, Database, Microscope, RefreshCw, ScanSearch } from "lucide-react";
 
 export default function HomePage() {
+  const [isBuildingDayCache, setIsBuildingDayCache] = useState(false);
+  const [cacheMessage, setCacheMessage] = useState("");
+
+  const buildDayFoundation = async () => {
+    setIsBuildingDayCache(true);
+    setCacheMessage("");
+
+    try {
+      const res = await fetch("/api/stocks/research/foundation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          interval: "day",
+          lookbackDays: 180,
+          category: "all",
+          maxSymbols: 201,
+          refresh: false,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setCacheMessage(data.error || "Failed to build day cache.");
+        return;
+      }
+
+      setCacheMessage(`Day cache ready: ${data.fetched || 0} fetched, ${data.cached || 0} cached`);
+    } catch (error) {
+      console.error("Failed to build day foundation from home page", error);
+      setCacheMessage("Network error while building day cache.");
+    } finally {
+      setIsBuildingDayCache(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 px-6 py-16">
       <div className="mx-auto max-w-6xl">
@@ -47,6 +83,15 @@ export default function HomePage() {
         </div>
 
         <div className="mt-12 flex flex-wrap gap-4">
+          <button
+            type="button"
+            onClick={buildDayFoundation}
+            disabled={isBuildingDayCache}
+            className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isBuildingDayCache ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+            Build Day Cache
+          </button>
           <Link
             href="/trade-tracker"
             className="inline-flex items-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 font-semibold text-slate-950 transition hover:bg-emerald-400"
@@ -72,7 +117,24 @@ export default function HomePage() {
           >
             Test Auth Flow
           </Link>
+          <Link
+            href="/options-structure"
+            className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-3 font-semibold text-sky-200 transition hover:bg-sky-500/20"
+          >
+            Open Options Structure
+          </Link>
+          <Link
+            href="/research"
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10"
+          >
+            <Microscope className="h-4 w-4" />
+            Open Research
+          </Link>
         </div>
+
+        {cacheMessage ? (
+          <p className="mt-4 text-sm text-slate-300">{cacheMessage}</p>
+        ) : null}
       </div>
     </main>
   );

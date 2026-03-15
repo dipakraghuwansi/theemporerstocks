@@ -5,6 +5,8 @@ import { getStockUniverse } from '@/lib/stockUniverseStore';
 
 const TOKEN_FILE = path.join(process.cwd(), '.kite_token');
 const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
+const OFI_WINDOW_SIZE = 12;
+const VPIN_WINDOW_SIZE = 24;
 
 type IoLike = {
   emit: (event: string, payload: unknown) => void;
@@ -29,7 +31,33 @@ type StreamQuote = {
   high: number | null;
   low: number | null;
   close: number | null;
+  bestBidPrice: number | null;
+  bestBidQuantity: number | null;
+  bestAskPrice: number | null;
+  bestAskQuantity: number | null;
+  microprice: number | null;
+  micropriceEdgePct: number | null;
+  orderFlowImbalance: number | null;
+  rollingOfi: number | null;
+  vpin: number | null;
   timestamp: string;
+};
+
+type BookState = {
+  bestBidPrice: number | null;
+  bestBidQuantity: number | null;
+  bestAskPrice: number | null;
+  bestAskQuantity: number | null;
+};
+
+type TradeState = {
+  lastPrice: number | null;
+  volume: number;
+};
+
+type FlowBucket = {
+  signedVolume: number;
+  totalVolume: number;
 };
 
 let kiteInstance: KiteConnect | null = null;
@@ -48,6 +76,67 @@ let initializationPromise: Promise<void> | null = null;
 let lastUniverseSyncAt: string | null = null;
 let lastConnectAttemptAt: string | null = null;
 let lastError: string | null = null;
+let previousBookState = new Map<string, BookState>();
+let ofiHistory = new Map<string, number[]>();
+let previousTradeState = new Map<string, TradeState>();
+let vpinHistory = new Map<string, FlowBucket[]>();
+
+function getDepthMetrics(tick: any) {
+  const bestBid = tick.depth?.buy?.[0];
+  const bestAsk = tick.depth?.sell?.[0];
+
+  if (!bestBid || !bestAsk) {
+    return {
+      bestBidPrice: null,
+      bestBidQuantity: null,
+      bestAskPrice: null,
+      bestAskQuantity: null,
+      microprice: null,
+    };
+  }
+
+  const bidPrice = Number(bestBid.price || 0);
+  const bidQuantity = Number(bestBid.quantity || 0);
+  const askPrice = Number(bestAsk.price || 0);
+  const askQuantity = Number(bestAsk.quantity || 0);
+  const denominator = bidQuantity + askQuantity;
+
+  return {
+    bestBidPrice: bidPrice || null,
+    bestBidQuantity: bidQuantity || null,
+    bestAskPrice: askPrice || null,
+    bestAskQuantity: askQuantity || null,
+    microprice:
+      bidPrice > 0 && askPrice > 0 && denominator > 0
+        ? Number((((askPrice * bidQuantity) + (bidPrice * askQuantity)) / denominator).toFixed(2))
+        : null,
+  };
+}
+
+function getOrderFlowImbalance(previous: BookState | null, current: BookState) {
+  if (
+    !previous ||
+    current.bestBidPrice === null ||
+    current.bestBidQuantity === null ||
+    current.bestAskPrice === null ||
+    current.bestAskQuantity === null ||
+    previous.bestBidPrice === null ||
+    previous.bestBidQuantity === null ||
+    previous.bestAskPrice === null ||
+    previous.bestAskQuantity === null
+  ) {
+    return null;
+  }
+
+  const bidContribution =
+    (current.bestBidPrice >= previous.bestBidPrice ? current.bestBidQuantity : 0) -
+    (current.bestBidPrice <= previous.bestBidPrice ? previous.bestBidQuantity : 0);
+  const askContribution =
+    (current.bestAskPrice <= previous.bestAskPrice ? current.bestAskQuantity : 0) -
+    (current.bestAskPrice >= previous.bestAskPrice ? previous.bestAskQuantity : 0);
+
+  return bidContribution - askContribution;
+}
 
 function getApiKey() {
   return process.env.KITE_API_KEY || '';
@@ -156,6 +245,10 @@ async function subscribeUniverse() {
 
   subscribedTokens = nextTokens;
   latestQuotes = new Map();
+  previousBookState = new Map();
+  ofiHistory = new Map();
+  previousTradeState = new Map();
+  vpinHistory = new Map();
   lastUniverseSyncAt = new Date().toISOString();
 
   if (nextTokens.length === 0) {
@@ -164,7 +257,7 @@ async function subscribeUniverse() {
   }
 
   tickerInstance.subscribe(nextTokens);
-  tickerInstance.setMode(tickerInstance.modeQuote, nextTokens);
+  tickerInstance.setMode(tickerInstance.modeFull, nextTokens);
 
   console.log(`[Stock Stream] Subscribed to ${nextTokens.length} universe instruments.`);
   emitSnapshot();
@@ -182,6 +275,65 @@ function attachTickerHandlers(ticker: KiteTicker) {
       const close = tick.ohlc?.close ?? null;
       const lastPrice = tick.last_price;
       const change = close ? ((lastPrice - close) / close) * 100 : null;
+      const depth = getDepthMetrics(tick);
+      const previous = previousBookState.get(meta.instrument) || null;
+      const currentBook = {
+        bestBidPrice: depth.bestBidPrice,
+        bestBidQuantity: depth.bestBidQuantity,
+        bestAskPrice: depth.bestAskPrice,
+        bestAskQuantity: depth.bestAskQuantity,
+      };
+      const orderFlowImbalance = getOrderFlowImbalance(previous, currentBook);
+      previousBookState.set(meta.instrument, currentBook);
+      const nextOfiHistory = ofiHistory.get(meta.instrument) || [];
+      if (orderFlowImbalance !== null) {
+        nextOfiHistory.push(orderFlowImbalance);
+      }
+      while (nextOfiHistory.length > OFI_WINDOW_SIZE) {
+        nextOfiHistory.shift();
+      }
+      ofiHistory.set(meta.instrument, nextOfiHistory);
+      const mid =
+        depth.bestBidPrice !== null && depth.bestAskPrice !== null
+          ? (depth.bestBidPrice + depth.bestAskPrice) / 2
+          : null;
+      const micropriceEdgePct =
+        depth.microprice !== null && mid && mid > 0 ? Number((((depth.microprice - mid) / mid) * 100).toFixed(3)) : null;
+      const rollingOfi =
+        nextOfiHistory.length > 0
+          ? nextOfiHistory.reduce((sum, value) => sum + value, 0)
+          : null;
+      const previousTrade = previousTradeState.get(meta.instrument) || { lastPrice: null, volume: 0 };
+      const volumeDelta = Math.max(0, Number((tick.volume_traded || 0) - previousTrade.volume));
+      const direction =
+        previousTrade.lastPrice === null
+          ? 0
+          : lastPrice > previousTrade.lastPrice
+            ? 1
+            : lastPrice < previousTrade.lastPrice
+              ? -1
+              : orderFlowImbalance !== null
+                ? Math.sign(orderFlowImbalance)
+                : 0;
+      const nextVpinHistory = vpinHistory.get(meta.instrument) || [];
+      if (volumeDelta > 0) {
+        nextVpinHistory.push({
+          signedVolume: volumeDelta * direction,
+          totalVolume: volumeDelta,
+        });
+      }
+      while (nextVpinHistory.length > VPIN_WINDOW_SIZE) {
+        nextVpinHistory.shift();
+      }
+      vpinHistory.set(meta.instrument, nextVpinHistory);
+      previousTradeState.set(meta.instrument, {
+        lastPrice,
+        volume: tick.volume_traded || 0,
+      });
+      const totalBucketVolume = nextVpinHistory.reduce((sum, item) => sum + item.totalVolume, 0);
+      const totalSignedImbalance = nextVpinHistory.reduce((sum, item) => sum + Math.abs(item.signedVolume), 0);
+      const vpin =
+        totalBucketVolume > 0 ? Number((totalSignedImbalance / totalBucketVolume).toFixed(3)) : null;
 
       latestQuotes.set(meta.instrument, {
         instrumentToken,
@@ -194,6 +346,15 @@ function attachTickerHandlers(ticker: KiteTicker) {
         high: tick.ohlc?.high ?? null,
         low: tick.ohlc?.low ?? null,
         close,
+        bestBidPrice: depth.bestBidPrice,
+        bestBidQuantity: depth.bestBidQuantity,
+        bestAskPrice: depth.bestAskPrice,
+        bestAskQuantity: depth.bestAskQuantity,
+        microprice: depth.microprice,
+        micropriceEdgePct,
+        orderFlowImbalance,
+        rollingOfi,
+        vpin,
         timestamp: now,
       });
     }

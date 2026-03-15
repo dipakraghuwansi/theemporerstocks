@@ -14,6 +14,15 @@ export interface StockStreamQuote {
   high: number | null;
   low: number | null;
   close: number | null;
+  bestBidPrice: number | null;
+  bestBidQuantity: number | null;
+  bestAskPrice: number | null;
+  bestAskQuantity: number | null;
+  microprice: number | null;
+  micropriceEdgePct: number | null;
+  orderFlowImbalance: number | null;
+  rollingOfi: number | null;
+  vpin: number | null;
   timestamp: string;
 }
 

@@ -13,3 +13,8 @@ src/ai/venv/
 .kite_token
 
 *.log
+
+historical_cache/
+research_manifest.json
+options_structure_snapshots.json
+sector_breadth_snapshot.json

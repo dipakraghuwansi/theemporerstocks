@@ -1,5 +1,9 @@
+import fs from 'fs';
 import { NextRequest, NextResponse } from 'next/server';
+import path from 'path';
 import { getKiteInstance } from '@/lib/kiteHelper';
+import { readDataset } from '@/lib/historical/cache';
+import { buildOptionStructureBatch } from '@/lib/optionsStructure/core';
 import { SCREEN_LABELS, StockScreenType } from '@/lib/stockUniverse';
 import {
   average,
@@ -12,10 +16,23 @@ import {
   lowest,
 } from '@/lib/stockIndicators';
 import { getStockUniverse } from '@/lib/stockUniverseStore';
+import {
+  applySectorSnapshot,
+  buildCalibrationContext,
+  buildRegime,
+  buildSectorContext,
+  createScreenerScorePayload,
+  ScreenerBaseMetrics,
+  ScreenerScoredResult,
+  screenMatches,
+  scoreScreenerResult,
+} from '@/lib/screenerScoring';
+import { readResearchManifest } from '@/lib/research/cache';
+import { getProbabilityEstimate } from '@/lib/research/stats';
 
 const NIFTY_50_TOKEN = 256265;
-const DAY_MS = 24 * 60 * 60 * 1000;
 const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
+const SECTOR_SNAPSHOT_PATH = path.join(process.cwd(), 'sector_breadth_snapshot.json');
 
 type InstrumentMeta = {
   instrumentToken: number;
@@ -24,31 +41,8 @@ type InstrumentMeta = {
   segment: string;
 };
 
-type ScreenResult = {
-  symbol: string;
-  instrument: string;
-  sector: string;
-  lastPrice: number;
-  dayChangePct: number;
-  gapPct: number;
-  volume: number;
-  avgVolume20: number | null;
-  volumeExpansion: number | null;
-  sma20: number | null;
-  sma50: number | null;
-  rsi14: number | null;
-  atr14: number | null;
-  vwap: number | null;
-  relativeStrength20d: number | null;
-  breakoutLevel: number | null;
-  breakdownLevel: number | null;
-  aboveVwap: boolean;
-  deliveryDataAvailable: boolean;
-  score: number;
-  thesis: string;
-};
-
-type BaseUniverseMetrics = Omit<ScreenResult, 'score' | 'thesis'>;
+type ScreenResult = ScreenerScoredResult;
+type BaseUniverseMetrics = ScreenerBaseMetrics;
 
 let instrumentCache: Map<string, InstrumentMeta> | null = null;
 let lastInstrumentFetch = 0;
@@ -97,23 +91,6 @@ async function getInstrumentMap() {
   return nextMap;
 }
 
-function getISTDateTimeStrings() {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-
-  const date = `${parts.find((p) => p.type === 'year')?.value}-${parts.find((p) => p.type === 'month')?.value}-${parts.find((p) => p.type === 'day')?.value}`;
-  return {
-    fromMinute: `${date} 09:15:00`,
-    toMinute: `${date} 15:30:00`,
-    today: date,
-  };
-}
-
 function toScreenType(value: string | null): StockScreenType {
   if (value === 'swing-setups' || value === 'mean-reversion' || value === 'breakout-watchlist') {
     return value;
@@ -140,85 +117,44 @@ function computeSectorBreadth(results: Array<BaseUniverseMetrics | ScreenResult>
   }));
 }
 
-function screenMatches(screen: StockScreenType, result: BaseUniverseMetrics) {
-  switch (screen) {
-    case 'intraday-momentum':
-      return Boolean(
-        result.aboveVwap &&
-        result.dayChangePct > 0.8 &&
-        (result.volumeExpansion || 0) >= 1.2 &&
-        (result.relativeStrength20d || 0) > 0
-      );
-    case 'swing-setups':
-      return Boolean(
-        result.sma20 !== null &&
-        result.sma50 !== null &&
-        result.sma20 > result.sma50 &&
-        result.lastPrice > result.sma20 &&
-        (result.rsi14 || 0) >= 50 &&
-        (result.rsi14 || 0) <= 68
-      );
-    case 'mean-reversion':
-      return Boolean(
-        result.sma20 !== null &&
-        result.lastPrice < result.sma20 &&
-        (result.rsi14 || 100) <= 42 &&
-        result.gapPct < 0
-      );
-    case 'breakout-watchlist':
-      return Boolean(
-        result.breakoutLevel !== null &&
-        result.lastPrice >= result.breakoutLevel * 0.985 &&
-        (result.volumeExpansion || 0) >= 1.1
-      );
+function readSectorSnapshot() {
+  if (!fs.existsSync(SECTOR_SNAPSHOT_PATH)) {
+    return [];
+  }
+
+  try {
+    return JSON.parse(fs.readFileSync(SECTOR_SNAPSHOT_PATH, 'utf8')) as Array<{
+      sector: string;
+      breadthPct: number;
+      aboveSma20Pct: number;
+      avgDayChangePct: number;
+      generatedAt: string;
+    }>;
+  } catch {
+    return [];
   }
 }
 
-function computeScore(screen: StockScreenType, result: BaseUniverseMetrics) {
-  const volumeBoost = result.volumeExpansion ? Math.min(result.volumeExpansion, 3) * 12 : 0;
-  const rsBoost = result.relativeStrength20d ? Math.max(result.relativeStrength20d, 0) * 8 : 0;
-  const momentumBoost = Math.max(result.dayChangePct, 0) * 10;
-  const reversalBoost = Math.max((50 - (result.rsi14 || 50)) / 2, 0) * 4;
-  const breakoutBoost =
-    result.breakoutLevel && result.lastPrice > 0
-      ? Math.max(0, 1 - Math.abs(result.breakoutLevel - result.lastPrice) / result.lastPrice) * 20
-      : 0;
+function calculateBeta(stockCloses: number[], benchmarkCloses: number[]) {
+  const sample = Math.min(stockCloses.length, benchmarkCloses.length);
+  if (sample < 21) return null;
 
-  switch (screen) {
-    case 'intraday-momentum':
-      return Number((momentumBoost + volumeBoost + rsBoost + (result.aboveVwap ? 15 : 0)).toFixed(1));
-    case 'swing-setups':
-      return Number((volumeBoost + rsBoost + breakoutBoost + ((result.rsi14 || 0) - 45)).toFixed(1));
-    case 'mean-reversion':
-      return Number((reversalBoost + Math.abs(Math.min(result.gapPct, 0)) * 6 + volumeBoost / 2).toFixed(1));
-    case 'breakout-watchlist':
-      return Number((breakoutBoost + volumeBoost + momentumBoost / 2 + rsBoost).toFixed(1));
-  }
-}
+  const stockWindow = stockCloses.slice(-21);
+  const benchmarkWindow = benchmarkCloses.slice(-21);
+  const stockReturns = stockWindow.slice(1).map((price, index) => ((price - stockWindow[index]) / stockWindow[index]) * 100);
+  const benchmarkReturns = benchmarkWindow
+    .slice(1)
+    .map((price, index) => ((price - benchmarkWindow[index]) / benchmarkWindow[index]) * 100);
 
-function buildThesis(screen: StockScreenType, result: BaseUniverseMetrics) {
-  switch (screen) {
-    case 'intraday-momentum':
-      return `${result.symbol} is trading ${result.aboveVwap ? 'above' : 'below'} VWAP with ${formatNullable(
-        result.volumeExpansion
-      )}x volume expansion and ${result.dayChangePct.toFixed(2)}% day strength.`;
-    case 'swing-setups':
-      return `${result.symbol} is holding above its trend stack with RSI ${formatNullable(result.rsi14)} and a breakout trigger near ${formatNullable(
-        result.breakoutLevel
-      )}.`;
-    case 'mean-reversion':
-      return `${result.symbol} has pulled back ${formatNullable(result.gapPct)}% on the gap with RSI ${formatNullable(
-        result.rsi14
-      )}, putting it on a rebound watchlist.`;
-    case 'breakout-watchlist':
-      return `${result.symbol} is approaching a ${formatNullable(result.breakoutLevel)} breakout level with ${formatNullable(
-        result.volumeExpansion
-      )}x volume versus its 20-day average.`;
-  }
-}
+  const meanStock = stockReturns.reduce((sum, value) => sum + value, 0) / stockReturns.length;
+  const meanBenchmark = benchmarkReturns.reduce((sum, value) => sum + value, 0) / benchmarkReturns.length;
+  const covariance = stockReturns.reduce(
+    (sum, value, index) => sum + (value - meanStock) * (benchmarkReturns[index] - meanBenchmark),
+    0
+  ) / stockReturns.length;
+  const variance = benchmarkReturns.reduce((sum, value) => sum + (value - meanBenchmark) ** 2, 0) / benchmarkReturns.length;
 
-function formatNullable(value: number | null) {
-  return value === null ? 'n/a' : value.toFixed(2);
+  return variance > 0 ? covariance / variance : null;
 }
 
 async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, InstrumentMeta>) {
@@ -234,19 +170,13 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
   }).filter(Boolean) as Array<(typeof universe)[number] & { instrumentToken: number }>;
 
   const quotes = await kite.getQuote(universeWithTokens.map((item) => item.instrument));
-  const { fromMinute, toMinute, today } = getISTDateTimeStrings();
-
-  const todayDate = new Date(today);
-  const fromDaily = new Date(todayDate.getTime() - 90 * DAY_MS).toISOString().split('T')[0];
-  const benchmarkDaily = await kite.getHistoricalData(NIFTY_50_TOKEN, 'day', fromDaily, today, false);
-  const benchmarkCloses = benchmarkDaily.map((candle: any) => candle.close);
 
   const stockResults = await Promise.all(
     universeWithTokens.map(async (item) => {
-      const [dailyCandles, minuteCandles] = await Promise.all([
-        kite.getHistoricalData(item.instrumentToken, 'day', fromDaily, today, false).catch(() => []),
-        kite.getHistoricalData(item.instrumentToken, 'minute', fromMinute, toMinute, false).catch(() => []),
-      ]);
+      const dailyDataset = readDataset('day', item.symbol);
+      const minuteDataset = readDataset('minute', item.symbol);
+      const dailyCandles = dailyDataset?.candles || [];
+      const minuteCandles = minuteDataset?.candles || [];
 
       const quote = quotes[item.instrument];
       if (!quote || dailyCandles.length < 25) return null;
@@ -262,11 +192,19 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
       const volume = quote.volume || 0;
 
       const previous20Volumes = volumes.slice(-21, -1).filter((value: number) => value > 0);
+      const previous7Volumes = volumes.slice(-8, -1).filter((value: number) => value > 0);
+      const prior7Volumes = volumes.slice(-15, -8).filter((value: number) => value > 0);
       const previous20Highs = highs.slice(-21, -1);
       const previous20Lows = lows.slice(-21, -1);
+      const benchmarkDataset = readDataset('day', 'NIFTY50_BENCHMARK');
+      const benchmarkCloses = benchmarkDataset?.candles?.map((candle: any) => candle.close) || [];
       const benchmark20 = benchmarkCloses.slice(-21);
       const stock20 = closes.slice(-21);
 
+      const avgVolume7 = average(previous7Volumes);
+      const priorAvgVolume7 = average(prior7Volumes);
+      const avgVolume7Compare =
+        avgVolume7 && priorAvgVolume7 && priorAvgVolume7 > 0 ? avgVolume7 / priorAvgVolume7 : null;
       const avgVolume20 = average(previous20Volumes);
       const volumeExpansion = avgVolume20 && avgVolume20 > 0 ? volume / avgVolume20 : null;
       const sma20 = calculateSma(closes, 20);
@@ -280,6 +218,7 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
       const benchmarkReturn20 =
         benchmark20.length >= 2 ? calculatePercentChange(benchmark20[benchmark20.length - 1], benchmark20[0]) : null;
       const stockReturn20 = stock20.length >= 2 ? calculatePercentChange(stock20[stock20.length - 1], stock20[0]) : null;
+      const beta20 = benchmarkCloses.length >= 21 ? calculateBeta(closes, benchmarkCloses) : null;
       const relativeStrength20d =
         benchmarkReturn20 !== null && stockReturn20 !== null ? stockReturn20 - benchmarkReturn20 : null;
 
@@ -287,10 +226,15 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
         symbol: item.symbol,
         instrument: item.instrument,
         sector: item.sector,
+        category: item.category,
         lastPrice,
+        previousClose,
+        openPrice: open,
         dayChangePct: Number(calculatePercentChange(lastPrice, previousClose).toFixed(2)),
         gapPct: Number(calculatePercentChange(open, previousClose).toFixed(2)),
         volume,
+        avgVolume7: avgVolume7 ? Number(avgVolume7.toFixed(0)) : null,
+        avgVolume7Compare: avgVolume7Compare ? Number(avgVolume7Compare.toFixed(2)) : null,
         avgVolume20: avgVolume20 ? Number(avgVolume20.toFixed(0)) : null,
         volumeExpansion: volumeExpansion ? Number(volumeExpansion.toFixed(2)) : null,
         sma20: sma20 ? Number(sma20.toFixed(2)) : null,
@@ -298,7 +242,17 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
         rsi14: rsi14 ? Number(rsi14.toFixed(2)) : null,
         atr14: atr14 ? Number(atr14.toFixed(2)) : null,
         vwap: vwap ? Number(vwap.toFixed(2)) : null,
+        microprice: null,
+        micropriceEdgePct: null,
+        orderFlowImbalance: null,
+        rollingOfi: null,
+        vpin: null,
         relativeStrength20d: relativeStrength20d ? Number(relativeStrength20d.toFixed(2)) : null,
+        residualAlpha20d: stockReturn20 !== null ? Number(stockReturn20.toFixed(2)) : null,
+        factorBasketAlpha20d:
+          stockReturn20 !== null && benchmarkReturn20 !== null && beta20 !== null
+            ? Number((stockReturn20 - beta20 * benchmarkReturn20).toFixed(2))
+            : null,
         breakoutLevel: breakoutLevel ? Number(breakoutLevel.toFixed(2)) : null,
         breakdownLevel: breakdownLevel ? Number(breakdownLevel.toFixed(2)) : null,
         aboveVwap: vwap !== null ? lastPrice > vwap : false,
@@ -309,7 +263,43 @@ async function getBaseUniverseMetrics(kite: any, instrumentMap: Map<string, Inst
     })
   );
 
-  baseMetricsCache = stockResults.filter((item): item is BaseUniverseMetrics => Boolean(item));
+  const cleanResults = stockResults.filter((item): item is BaseUniverseMetrics => Boolean(item));
+  const sectorReturns = new Map<string, number[]>();
+  const categoryReturns = new Map<string, number[]>();
+
+  for (const item of cleanResults) {
+    if (item.residualAlpha20d === null) continue;
+    const existing = sectorReturns.get(item.sector) || [];
+    existing.push(item.residualAlpha20d);
+    sectorReturns.set(item.sector, existing);
+    const existingCategory = categoryReturns.get(item.category) || [];
+    existingCategory.push(item.residualAlpha20d);
+    categoryReturns.set(item.category, existingCategory);
+  }
+
+  baseMetricsCache = cleanResults.map((item) => {
+    const sectorAverage = average(sectorReturns.get(item.sector) || []);
+    const categoryAverage = average(categoryReturns.get(item.category) || []);
+    const factorBasketBaseline = average(
+      [sectorAverage, categoryAverage].filter((value): value is number => value !== null)
+    );
+    return {
+      ...item,
+      residualAlpha20d:
+        item.residualAlpha20d !== null && sectorAverage !== null
+          ? Number((item.residualAlpha20d - sectorAverage).toFixed(2))
+          : null,
+      factorBasketAlpha20d:
+        item.factorBasketAlpha20d !== null && factorBasketBaseline !== null
+          ? Number(
+              (
+                item.factorBasketAlpha20d -
+                factorBasketBaseline
+              ).toFixed(2)
+            )
+          : null,
+    };
+  });
   baseMetricsCachedAt = now;
   return baseMetricsCache;
 }
@@ -326,13 +316,47 @@ export async function GET(request: NextRequest) {
     const instrumentMap = await getInstrumentMap();
     const universe = getStockUniverse();
     const baseMetrics = await getBaseUniverseMetrics(kite, instrumentMap);
-    const matches = baseMetrics
-      .filter((item) => screenMatches(screen, item))
-      .map((item) => ({
-        ...item,
-        score: computeScore(screen, item),
-        thesis: buildThesis(screen, item),
+    if (baseMetrics.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'No cached historical datasets were available for the screener. Build /api/stocks/research/foundation for day data first.',
+        },
+        { status: 503 }
+      );
+    }
+    const sectorContext = applySectorSnapshot(buildSectorContext(baseMetrics), readSectorSnapshot());
+    const benchmarkDataset = readDataset('day', 'NIFTY50_BENCHMARK');
+    const benchmarkCloses = benchmarkDataset?.candles?.map((row) => row.close) || [];
+    const benchmarkQuote = await kite.getQuote(['NSE:NIFTY 50']).catch(() => ({}));
+    const benchmarkLastPrice =
+      benchmarkQuote['NSE:NIFTY 50']?.last_price || benchmarkCloses[benchmarkCloses.length - 1] || 0;
+    const regime = buildRegime(baseMetrics, benchmarkCloses, benchmarkLastPrice);
+    const researchManifest = readResearchManifest();
+    const calibrationContext = buildCalibrationContext(researchManifest);
+    const matchedBaseMetrics = baseMetrics.filter((item) => screenMatches(screen, item));
+    const optionStructureContext = await buildOptionStructureBatch(
+      kite,
+      matchedBaseMetrics.map((item) => ({
+        symbol: item.symbol,
+        spotPrice: item.lastPrice,
       }))
+    );
+    const scorePayload = createScreenerScorePayload(
+      baseMetrics,
+      sectorContext,
+      optionStructureContext,
+      regime,
+      calibrationContext
+    );
+    const matches = matchedBaseMetrics
+      .map((item) =>
+        scoreScreenerResult(
+          screen,
+          item,
+          scorePayload,
+          getProbabilityEstimate(researchManifest, screen, item.symbol)
+        )
+      )
       .sort((a, b) => b.score - a.score);
 
     return NextResponse.json({
@@ -342,10 +366,19 @@ export async function GET(request: NextRequest) {
       universeSize: universe.length,
       matched: matches.length,
       benchmark: 'NIFTY 50',
+      scorePayload,
       notes: [
         'Historical indicators are cached for 5 minutes to reduce repeated Kite historical API load.',
-        'VWAP is derived from intraday minute candles inside that cached analytics layer.',
+        'The screener now reads day and minute indicator inputs from local historical_cache data instead of fanning out to Kite historical APIs on every load.',
+        'VWAP is derived from cached intraday minute candles when they exist; otherwise it stays unavailable.',
         'Live quote, day change, volume, and volume expansion are then updated from the websocket stream in the UI.',
+        'Scores are now normalized cross-sectionally and use ATR-adjusted move/proximity factors.',
+        'Sector breadth overlay is applied on top of stock-level scores using breadth, breadth delta, above-SMA20 participation, and average day change.',
+        'A market regime layer now boosts or suppresses screens based on benchmark trend and broad market participation.',
+        'A lightweight HMM-style filter now smooths regime classification across recent benchmark moves before the current breadth state is applied.',
+        'Option structure overlay is built only for matched names, then batched into one quote request to reduce Kite load while adding gamma/OI and futures buildup context.',
+        'Factor basket alpha now blends beta-adjusted benchmark return with sector/category context to isolate stock-specific strength.',
+        'Overlay aggressiveness is lightly calibrated from historical screen performance so newer microstructure and derivatives signals do not dominate by default.',
         'Delivery expansion is not available from the current Kite data path, so it is marked unavailable.',
         'Sector breadth is computed from the curated stock universe used by this screener.',
       ],
