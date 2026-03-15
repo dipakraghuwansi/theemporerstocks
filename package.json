@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "concurrently \"next dev\" \"npm run dev:ws\"",
     "dev:next": "next dev",
-    "dev:ws": "echo \"Options websocket engine archived under src/archive/options/ws-engine\"",
+    "dev:ws": "tsx src/ws-engine/server.ts",
     "build": "next build",
-    "start": "next start",
+    "start": "concurrently \"next start\" \"npm run dev:ws\"",
     "lint": "eslint"
   },
   "dependencies": {

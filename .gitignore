@@ -10,5 +10,6 @@ tsconfig.tsbuildinfo
 .env.production.local
 
 src/ai/venv/
+.kite_token
 
 *.log

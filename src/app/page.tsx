@@ -60,6 +60,18 @@ export default function HomePage() {
           >
             Open Positions
           </Link>
+          <Link
+            href="/screener"
+            className="inline-flex items-center gap-2 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-3 font-semibold text-sky-200 transition hover:bg-sky-500/20"
+          >
+            Open Screener
+          </Link>
+          <Link
+            href="/auth-test"
+            className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-3 font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
+          >
+            Test Auth Flow
+          </Link>
         </div>
       </div>
     </main>

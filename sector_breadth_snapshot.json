@@ -1,0 +1,72 @@
+[
+  {
+    "sector": "Healthcare",
+    "breadthPct": 20,
+    "aboveSma20Pct": 60,
+    "avgDayChangePct": -0.99,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Consumer Durables",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -1.1,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Services",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -2.03,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Metals & Mining",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -2.04,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Financial Services",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -2.06,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Automobile and Auto Components",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -3.64,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Diversified",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -3.85,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Capital Goods",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -3.92,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Construction Materials",
+    "breadthPct": 0,
+    "aboveSma20Pct": 0,
+    "avgDayChangePct": -3.98,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  },
+  {
+    "sector": "Oil Gas & Consumable Fuels",
+    "breadthPct": 0,
+    "aboveSma20Pct": 100,
+    "avgDayChangePct": -6.86,
+    "generatedAt": "2026-03-15T07:20:19.463Z"
+  }
+]

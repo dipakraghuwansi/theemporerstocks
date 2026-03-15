@@ -1,0 +1,1208 @@
+[
+  {
+    "symbol": "360ONE",
+    "instrument": "NSE:360ONE",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "3MINDIA",
+    "instrument": "NSE:3MINDIA",
+    "sector": "Diversified",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ABBOTINDIA",
+    "instrument": "NSE:ABBOTINDIA",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ABCAPITAL",
+    "instrument": "NSE:ABCAPITAL",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ACC",
+    "instrument": "NSE:ACC",
+    "sector": "Construction Materials",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ADANIENT",
+    "instrument": "NSE:ADANIENT",
+    "sector": "Metals & Mining",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "ADANIPORTS",
+    "instrument": "NSE:ADANIPORTS",
+    "sector": "Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "AIAENG",
+    "instrument": "NSE:AIAENG",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "AJANTPHARM",
+    "instrument": "NSE:AJANTPHARM",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ALKEM",
+    "instrument": "NSE:ALKEM",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "APARINDS",
+    "instrument": "NSE:APARINDS",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "APLAPOLLO",
+    "instrument": "NSE:APLAPOLLO",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "APOLLOHOSP",
+    "instrument": "NSE:APOLLOHOSP",
+    "sector": "Healthcare",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "APOLLOTYRE",
+    "instrument": "NSE:APOLLOTYRE",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ASHOKLEY",
+    "instrument": "NSE:ASHOKLEY",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ASIANPAINT",
+    "instrument": "NSE:ASIANPAINT",
+    "sector": "Consumer Durables",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "ASTRAL",
+    "instrument": "NSE:ASTRAL",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ATGL",
+    "instrument": "NSE:ATGL",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "AUBANK",
+    "instrument": "NSE:AUBANK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "AUROPHARMA",
+    "instrument": "NSE:AUROPHARMA",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "AWL",
+    "instrument": "NSE:AWL",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "AXISBANK",
+    "instrument": "NSE:AXISBANK",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BAJAJ-AUTO",
+    "instrument": "NSE:BAJAJ-AUTO",
+    "sector": "Automobile and Auto Components",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BAJAJFINSV",
+    "instrument": "NSE:BAJAJFINSV",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BAJFINANCE",
+    "instrument": "NSE:BAJFINANCE",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BALKRISIND",
+    "instrument": "NSE:BALKRISIND",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BANKINDIA",
+    "instrument": "NSE:BANKINDIA",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BDL",
+    "instrument": "NSE:BDL",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BEL",
+    "instrument": "NSE:BEL",
+    "sector": "Capital Goods",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BERGEPAINT",
+    "instrument": "NSE:BERGEPAINT",
+    "sector": "Consumer Durables",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BHARATFORG",
+    "instrument": "NSE:BHARATFORG",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BHARTIARTL",
+    "instrument": "NSE:BHARTIARTL",
+    "sector": "Telecommunication",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "BHARTIHEXA",
+    "instrument": "NSE:BHARTIHEXA",
+    "sector": "Telecommunication",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BHEL",
+    "instrument": "NSE:BHEL",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BIOCON",
+    "instrument": "NSE:BIOCON",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BLUESTARCO",
+    "instrument": "NSE:BLUESTARCO",
+    "sector": "Consumer Durables",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "BSE",
+    "instrument": "NSE:BSE",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "CIPLA",
+    "instrument": "NSE:CIPLA",
+    "sector": "Healthcare",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "COALINDIA",
+    "instrument": "NSE:COALINDIA",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "COCHINSHIP",
+    "instrument": "NSE:COCHINSHIP",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "COFORGE",
+    "instrument": "NSE:COFORGE",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "COLPAL",
+    "instrument": "NSE:COLPAL",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "CONCOR",
+    "instrument": "NSE:CONCOR",
+    "sector": "Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "COROMANDEL",
+    "instrument": "NSE:COROMANDEL",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "CRISIL",
+    "instrument": "NSE:CRISIL",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "CUMMINSIND",
+    "instrument": "NSE:CUMMINSIND",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "DABUR",
+    "instrument": "NSE:DABUR",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "DALBHARAT",
+    "instrument": "NSE:DALBHARAT",
+    "sector": "Construction Materials",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "DEEPAKNTR",
+    "instrument": "NSE:DEEPAKNTR",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "DIXON",
+    "instrument": "NSE:DIXON",
+    "sector": "Consumer Durables",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "DRREDDY",
+    "instrument": "NSE:DRREDDY",
+    "sector": "Healthcare",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "EICHERMOT",
+    "instrument": "NSE:EICHERMOT",
+    "sector": "Automobile and Auto Components",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "ENDURANCE",
+    "instrument": "NSE:ENDURANCE",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ESCORTS",
+    "instrument": "NSE:ESCORTS",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ETERNAL",
+    "instrument": "NSE:ETERNAL",
+    "sector": "Consumer Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "EXIDEIND",
+    "instrument": "NSE:EXIDEIND",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "FACT",
+    "instrument": "NSE:FACT",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "FEDERALBNK",
+    "instrument": "NSE:FEDERALBNK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "FLUOROCHEM",
+    "instrument": "NSE:FLUOROCHEM",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "FORTIS",
+    "instrument": "NSE:FORTIS",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GICRE",
+    "instrument": "NSE:GICRE",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GLAXO",
+    "instrument": "NSE:GLAXO",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GLENMARK",
+    "instrument": "NSE:GLENMARK",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GMRAIRPORT",
+    "instrument": "NSE:GMRAIRPORT",
+    "sector": "Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GODFRYPHLP",
+    "instrument": "NSE:GODFRYPHLP",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GODREJIND",
+    "instrument": "NSE:GODREJIND",
+    "sector": "Diversified",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GODREJPROP",
+    "instrument": "NSE:GODREJPROP",
+    "sector": "Realty",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GRASIM",
+    "instrument": "NSE:GRASIM",
+    "sector": "Construction Materials",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "GUJGASLTD",
+    "instrument": "NSE:GUJGASLTD",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "GVT&D",
+    "instrument": "NSE:GVT&D",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HCLTECH",
+    "instrument": "NSE:HCLTECH",
+    "sector": "Information Technology",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "HDFCAMC",
+    "instrument": "NSE:HDFCAMC",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HDFCBANK",
+    "instrument": "NSE:HDFCBANK",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "HDFCLIFE",
+    "instrument": "NSE:HDFCLIFE",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "HEROMOTOCO",
+    "instrument": "NSE:HEROMOTOCO",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HEXT",
+    "instrument": "NSE:HEXT",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HINDALCO",
+    "instrument": "NSE:HINDALCO",
+    "sector": "Metals & Mining",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "HINDPETRO",
+    "instrument": "NSE:HINDPETRO",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HINDUNILVR",
+    "instrument": "NSE:HINDUNILVR",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "HONAUT",
+    "instrument": "NSE:HONAUT",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "HUDCO",
+    "instrument": "NSE:HUDCO",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ICICIBANK",
+    "instrument": "NSE:ICICIBANK",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "ICICIPRULI",
+    "instrument": "NSE:ICICIPRULI",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IDBI",
+    "instrument": "NSE:IDBI",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IDEA",
+    "instrument": "NSE:IDEA",
+    "sector": "Telecommunication",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IDFCFIRSTB",
+    "instrument": "NSE:IDFCFIRSTB",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IGL",
+    "instrument": "NSE:IGL",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "INDIANB",
+    "instrument": "NSE:INDIANB",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "INDIGO",
+    "instrument": "NSE:INDIGO",
+    "sector": "Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "INDUSINDBK",
+    "instrument": "NSE:INDUSINDBK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "INDUSTOWER",
+    "instrument": "NSE:INDUSTOWER",
+    "sector": "Telecommunication",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "INFY",
+    "instrument": "NSE:INFY",
+    "sector": "Information Technology",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "IOB",
+    "instrument": "NSE:IOB",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IPCALAB",
+    "instrument": "NSE:IPCALAB",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IRB",
+    "instrument": "NSE:IRB",
+    "sector": "Construction",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IRCTC",
+    "instrument": "NSE:IRCTC",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "IREDA",
+    "instrument": "NSE:IREDA",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ITC",
+    "instrument": "NSE:ITC",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "ITCHOTELS",
+    "instrument": "NSE:ITCHOTELS",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "JIOFIN",
+    "instrument": "NSE:JIOFIN",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "JKCEMENT",
+    "instrument": "NSE:JKCEMENT",
+    "sector": "Construction Materials",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "JSL",
+    "instrument": "NSE:JSL",
+    "sector": "Metals & Mining",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "JSWINFRA",
+    "instrument": "NSE:JSWINFRA",
+    "sector": "Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "JSWSTEEL",
+    "instrument": "NSE:JSWSTEEL",
+    "sector": "Metals & Mining",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "JUBLFOOD",
+    "instrument": "NSE:JUBLFOOD",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "KALYANKJIL",
+    "instrument": "NSE:KALYANKJIL",
+    "sector": "Consumer Durables",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "KEI",
+    "instrument": "NSE:KEI",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "KOTAKBANK",
+    "instrument": "NSE:KOTAKBANK",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "KPITTECH",
+    "instrument": "NSE:KPITTECH",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "KPRMILL",
+    "instrument": "NSE:KPRMILL",
+    "sector": "Textiles",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LICHSGFIN",
+    "instrument": "NSE:LICHSGFIN",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LINDEINDIA",
+    "instrument": "NSE:LINDEINDIA",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LLOYDSME",
+    "instrument": "NSE:LLOYDSME",
+    "sector": "Metals & Mining",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LT",
+    "instrument": "NSE:LT",
+    "sector": "Construction",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "LTF",
+    "instrument": "NSE:LTF",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LTTS",
+    "instrument": "NSE:LTTS",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "LUPIN",
+    "instrument": "NSE:LUPIN",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "M&M",
+    "instrument": "NSE:M&M",
+    "sector": "Automobile and Auto Components",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "M&MFIN",
+    "instrument": "NSE:M&MFIN",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MAHABANK",
+    "instrument": "NSE:MAHABANK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MANKIND",
+    "instrument": "NSE:MANKIND",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MARICO",
+    "instrument": "NSE:MARICO",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MARUTI",
+    "instrument": "NSE:MARUTI",
+    "sector": "Automobile and Auto Components",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "MAXHEALTH",
+    "instrument": "NSE:MAXHEALTH",
+    "sector": "Healthcare",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "MEDANTA",
+    "instrument": "NSE:MEDANTA",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MFSL",
+    "instrument": "NSE:MFSL",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MOTILALOFS",
+    "instrument": "NSE:MOTILALOFS",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MPHASIS",
+    "instrument": "NSE:MPHASIS",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MRF",
+    "instrument": "NSE:MRF",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "MUTHOOTFIN",
+    "instrument": "NSE:MUTHOOTFIN",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NAM-INDIA",
+    "instrument": "NSE:NAM-INDIA",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NATIONALUM",
+    "instrument": "NSE:NATIONALUM",
+    "sector": "Metals & Mining",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NESTLEIND",
+    "instrument": "NSE:NESTLEIND",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "NHPC",
+    "instrument": "NSE:NHPC",
+    "sector": "Power",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NIACL",
+    "instrument": "NSE:NIACL",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NLCINDIA",
+    "instrument": "NSE:NLCINDIA",
+    "sector": "Power",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NMDC",
+    "instrument": "NSE:NMDC",
+    "sector": "Metals & Mining",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NTPC",
+    "instrument": "NSE:NTPC",
+    "sector": "Power",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "NTPCGREEN",
+    "instrument": "NSE:NTPCGREEN",
+    "sector": "Power",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "NYKAA",
+    "instrument": "NSE:NYKAA",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "OBEROIRLTY",
+    "instrument": "NSE:OBEROIRLTY",
+    "sector": "Realty",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "OFSS",
+    "instrument": "NSE:OFSS",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "OIL",
+    "instrument": "NSE:OIL",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ONGC",
+    "instrument": "NSE:ONGC",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "PAGEIND",
+    "instrument": "NSE:PAGEIND",
+    "sector": "Textiles",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PATANJALI",
+    "instrument": "NSE:PATANJALI",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PAYTM",
+    "instrument": "NSE:PAYTM",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PERSISTENT",
+    "instrument": "NSE:PERSISTENT",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PETRONET",
+    "instrument": "NSE:PETRONET",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PGHH",
+    "instrument": "NSE:PGHH",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PHOENIXLTD",
+    "instrument": "NSE:PHOENIXLTD",
+    "sector": "Realty",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PIIND",
+    "instrument": "NSE:PIIND",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "POLICYBZR",
+    "instrument": "NSE:POLICYBZR",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "POLYCAB",
+    "instrument": "NSE:POLYCAB",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "POWERGRID",
+    "instrument": "NSE:POWERGRID",
+    "sector": "Power",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "POWERINDIA",
+    "instrument": "NSE:POWERINDIA",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PREMIERENE",
+    "instrument": "NSE:PREMIERENE",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "PRESTIGE",
+    "instrument": "NSE:PRESTIGE",
+    "sector": "Realty",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "RELIANCE",
+    "instrument": "NSE:RELIANCE",
+    "sector": "Oil Gas & Consumable Fuels",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "RVNL",
+    "instrument": "NSE:RVNL",
+    "sector": "Construction",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SAIL",
+    "instrument": "NSE:SAIL",
+    "sector": "Metals & Mining",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SBICARD",
+    "instrument": "NSE:SBICARD",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SBILIFE",
+    "instrument": "NSE:SBILIFE",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "SBIN",
+    "instrument": "NSE:SBIN",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "SCHAEFFLER",
+    "instrument": "NSE:SCHAEFFLER",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SHRIRAMFIN",
+    "instrument": "NSE:SHRIRAMFIN",
+    "sector": "Financial Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "SJVN",
+    "instrument": "NSE:SJVN",
+    "sector": "Power",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SONACOMS",
+    "instrument": "NSE:SONACOMS",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SRF",
+    "instrument": "NSE:SRF",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SUNDARMFIN",
+    "instrument": "NSE:SUNDARMFIN",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SUNPHARMA",
+    "instrument": "NSE:SUNPHARMA",
+    "sector": "Healthcare",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "SUPREMEIND",
+    "instrument": "NSE:SUPREMEIND",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SUZLON",
+    "instrument": "NSE:SUZLON",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SWIGGY",
+    "instrument": "NSE:SWIGGY",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "SYNGENE",
+    "instrument": "NSE:SYNGENE",
+    "sector": "Healthcare",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TATACOMM",
+    "instrument": "NSE:TATACOMM",
+    "sector": "Telecommunication",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TATACONSUM",
+    "instrument": "NSE:TATACONSUM",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "TATAELXSI",
+    "instrument": "NSE:TATAELXSI",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TATAINVEST",
+    "instrument": "NSE:TATAINVEST",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TATAMOTORS",
+    "instrument": "NSE:TATAMOTORS",
+    "sector": "Auto",
+    "category": "manual"
+  },
+  {
+    "symbol": "TATASTEEL",
+    "instrument": "NSE:TATASTEEL",
+    "sector": "Metals & Mining",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "TATATECH",
+    "instrument": "NSE:TATATECH",
+    "sector": "Information Technology",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TCS",
+    "instrument": "NSE:TCS",
+    "sector": "Information Technology",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "TECHM",
+    "instrument": "NSE:TECHM",
+    "sector": "Information Technology",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "THERMAX",
+    "instrument": "NSE:THERMAX",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TIINDIA",
+    "instrument": "NSE:TIINDIA",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TITAN",
+    "instrument": "NSE:TITAN",
+    "sector": "Consumer Durables",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "TMPV",
+    "instrument": "NSE:TMPV",
+    "sector": "Automobile and Auto Components",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "TORNTPOWER",
+    "instrument": "NSE:TORNTPOWER",
+    "sector": "Power",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "TRENT",
+    "instrument": "NSE:TRENT",
+    "sector": "Consumer Services",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "UBL",
+    "instrument": "NSE:UBL",
+    "sector": "Fast Moving Consumer Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "UCOBANK",
+    "instrument": "NSE:UCOBANK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "ULTRACEMCO",
+    "instrument": "NSE:ULTRACEMCO",
+    "sector": "Construction Materials",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "UNIONBANK",
+    "instrument": "NSE:UNIONBANK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "UNOMINDA",
+    "instrument": "NSE:UNOMINDA",
+    "sector": "Automobile and Auto Components",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "UPL",
+    "instrument": "NSE:UPL",
+    "sector": "Chemicals",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "VMM",
+    "instrument": "NSE:VMM",
+    "sector": "Consumer Services",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "VOLTAS",
+    "instrument": "NSE:VOLTAS",
+    "sector": "Consumer Durables",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "WAAREEENER",
+    "instrument": "NSE:WAAREEENER",
+    "sector": "Capital Goods",
+    "category": "niftymidcap150"
+  },
+  {
+    "symbol": "WIPRO",
+    "instrument": "NSE:WIPRO",
+    "sector": "Information Technology",
+    "category": "nifty50"
+  },
+  {
+    "symbol": "YESBANK",
+    "instrument": "NSE:YESBANK",
+    "sector": "Financial Services",
+    "category": "niftymidcap150"
+  }
+]
