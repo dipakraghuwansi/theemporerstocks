@@ -81,6 +81,10 @@ let ofiHistory = new Map<string, number[]>();
 let previousTradeState = new Map<string, TradeState>();
 let vpinHistory = new Map<string, FlowBucket[]>();
 
+function sameTokenSet(left: number[], right: number[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
 function getDepthMetrics(tick: any) {
   const bestBid = tick.depth?.buy?.[0];
   const bestAsk = tick.depth?.sell?.[0];
@@ -228,12 +232,19 @@ export function getStockStreamSnapshot() {
   };
 }
 
-async function subscribeUniverse() {
+async function subscribeUniverse(options: { force?: boolean } = {}) {
   if (!tickerInstance) return;
   await loadInstrumentMap();
 
   const universeTokens = getUniverseTokens();
   const nextTokens = universeTokens.map((item) => item.instrumentToken);
+  const shouldResetSubscriptions = options.force || !sameTokenSet(subscribedTokens, nextTokens);
+
+  if (!shouldResetSubscriptions) {
+    lastUniverseSyncAt = new Date().toISOString();
+    emitSnapshot();
+    return;
+  }
 
   if (subscribedTokens.length > 0) {
     try {
@@ -244,11 +255,22 @@ async function subscribeUniverse() {
   }
 
   subscribedTokens = nextTokens;
-  latestQuotes = new Map();
-  previousBookState = new Map();
-  ofiHistory = new Map();
-  previousTradeState = new Map();
-  vpinHistory = new Map();
+  const allowedInstruments = new Set(universeTokens.map((item) => item.instrument));
+  latestQuotes = new Map(
+    Array.from(latestQuotes.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  previousBookState = new Map(
+    Array.from(previousBookState.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  ofiHistory = new Map(
+    Array.from(ofiHistory.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  previousTradeState = new Map(
+    Array.from(previousTradeState.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  vpinHistory = new Map(
+    Array.from(vpinHistory.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
   lastUniverseSyncAt = new Date().toISOString();
 
   if (nextTokens.length === 0) {
@@ -472,7 +494,7 @@ export async function initializeStockStream(token: string, io: IoLike) {
 }
 
 export async function forceResubscribeUniverse() {
-  await subscribeUniverse();
+  await subscribeUniverse({ force: true });
   emitSnapshot();
   return getStockStreamSnapshot();
 }
