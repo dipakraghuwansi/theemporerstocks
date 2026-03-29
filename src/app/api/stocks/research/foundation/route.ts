@@ -19,7 +19,7 @@ function toInterval(value: string | null): HistoricalInterval {
 export async function GET(request: NextRequest) {
   try {
     const interval = toInterval(request.nextUrl.searchParams.get('interval'));
-    const manifest = getHistoricalFoundationStatus(interval);
+    const manifest = await getHistoricalFoundationStatus(interval);
     const cacheSummary = getHistoricalCacheSummary(interval);
 
     return NextResponse.json({

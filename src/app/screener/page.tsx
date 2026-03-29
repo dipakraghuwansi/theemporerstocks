@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Activity, ArrowUpRight, CircleHelp, Copy, Gauge, RefreshCw, SearchCheck, TrendingDown, TrendingUp, Wifi, WifiOff } from 'lucide-react';
+import { Activity, ArrowUpRight, CircleHelp, Copy, Gauge, RefreshCw, SearchCheck, ShoppingCart, TrendingDown, TrendingUp, Wifi, WifiOff } from 'lucide-react';
 import { OptionStructureSummary } from '@/lib/optionsStructure/types';
 import { buildBuyRecommendation } from '@/lib/research/recommendation';
 import { ProbabilityEstimate } from '@/lib/research/types';
@@ -90,8 +90,13 @@ type ScreenerPayload = {
       charmRegime: 'supportive' | 'dragging' | 'balanced' | 'unavailable';
       averageCallIv: number | null;
       averagePutIv: number | null;
+      atmIv: number | null;
+      nearAtmVolSkew: number | null;
+      wingCallIv: number | null;
+      wingPutIv: number | null;
       volSkew: number | null;
       volSkewRegime: 'put_fear' | 'call_chasing' | 'balanced' | 'unavailable';
+      termStructureSlope: number | null;
       gammaFlipLevel: number | null;
       callWall: number | null;
       putWall: number | null;
@@ -410,6 +415,19 @@ function getMetricSections(row: ScreenerResultRow) {
         },
         { label: 'Call IV', value: row.optionsStructure.averageCallIv?.toFixed(2) ? `${row.optionsStructure.averageCallIv.toFixed(2)}%` : 'n/a' },
         { label: 'Put IV', value: row.optionsStructure.averagePutIv?.toFixed(2) ? `${row.optionsStructure.averagePutIv.toFixed(2)}%` : 'n/a' },
+        { label: 'ATM IV', value: row.optionsStructure.atmIv?.toFixed(2) ? `${row.optionsStructure.atmIv.toFixed(2)}%` : 'n/a' },
+        { label: 'Wing Put IV', value: row.optionsStructure.wingPutIv?.toFixed(2) ? `${row.optionsStructure.wingPutIv.toFixed(2)}%` : 'n/a' },
+        { label: 'Wing Call IV', value: row.optionsStructure.wingCallIv?.toFixed(2) ? `${row.optionsStructure.wingCallIv.toFixed(2)}%` : 'n/a' },
+        {
+          label: 'Near ATM Skew',
+          value: row.optionsStructure.nearAtmVolSkew?.toFixed(2) ? `${row.optionsStructure.nearAtmVolSkew.toFixed(2)} pts` : 'n/a',
+          accent:
+            row.optionsStructure.nearAtmVolSkew === null
+              ? undefined
+              : row.optionsStructure.nearAtmVolSkew >= 0
+                ? 'text-amber-300'
+                : 'text-sky-300',
+        },
         {
           label: 'Vol Skew',
           value: row.optionsStructure.volSkew?.toFixed(2) ? `${row.optionsStructure.volSkew.toFixed(2)} pts` : 'n/a',
@@ -417,6 +435,16 @@ function getMetricSections(row: ScreenerResultRow) {
             row.optionsStructure.volSkew === null
               ? undefined
               : row.optionsStructure.volSkew >= 0
+                ? 'text-amber-300'
+                : 'text-sky-300',
+        },
+        {
+          label: 'Term Slope',
+          value: row.optionsStructure.termStructureSlope?.toFixed(2) ? `${row.optionsStructure.termStructureSlope.toFixed(2)} pts` : 'n/a',
+          accent:
+            row.optionsStructure.termStructureSlope === null
+              ? undefined
+              : row.optionsStructure.termStructureSlope >= 0
                 ? 'text-amber-300'
                 : 'text-sky-300',
         },
@@ -543,7 +571,17 @@ export default function ScreenerPage() {
   const [isBuildingDayFoundation, setIsBuildingDayFoundation] = useState(false);
   const [foundationMessage, setFoundationMessage] = useState('');
   const [copiedSymbol, setCopiedSymbol] = useState<string | null>(null);
+  const [activeJournalSymbol, setActiveJournalSymbol] = useState<string | null>(null);
+  const [journalMessage, setJournalMessage] = useState('');
   const { snapshot, socketConnected } = useStockStream();
+  const formatStreamTime = (value?: string | null) =>
+    value
+      ? new Date(value).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      : '--';
 
   const loadScreen = async (screen: StockScreenType) => {
     setSelectedScreen(screen);
@@ -679,6 +717,49 @@ export default function ScreenerPage() {
     }
   };
 
+  const addJournalTrade = async (row: ScreenerResultRow) => {
+    setActiveJournalSymbol(row.symbol);
+    setJournalMessage('');
+
+    try {
+      const res = await fetch('/api/journal/trades', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbol: row.symbol,
+          instrument: row.instrument,
+          sector: row.sector,
+          category: row.category,
+          screen: selectedScreen,
+          direction: 'BUY',
+          quantity: 1,
+          score: row.score,
+          confidenceLabel: row.buyRecommendation.confidenceLabel,
+          entryPrice: row.buyRecommendation.plan.entryPrice,
+          stopLoss: row.buyRecommendation.plan.stopLoss,
+          targetPrice: row.buyRecommendation.plan.targetPrice,
+          thesis: row.thesis,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setJournalMessage(data.error || 'Unable to add this paper trade to the journal.');
+        return;
+      }
+
+      setJournalMessage(data.message || 'Paper buy added to journal.');
+      window.setTimeout(() => {
+        setJournalMessage('');
+      }, 3000);
+    } catch (error) {
+      console.error('Failed to add journal trade', error);
+      setJournalMessage('Network error while adding the journal trade.');
+    } finally {
+      setActiveJournalSymbol(null);
+    }
+  };
+
   const results = (payload?.results || []).map((row) => {
     const liveQuote = snapshot.quotes.find((quote) => quote.instrument === row.instrument);
     if (!liveQuote) return row;
@@ -805,7 +886,7 @@ export default function ScreenerPage() {
           <SummaryCard label="Subscribed Tokens" value={String(snapshot.subscribed || '--')} />
           <SummaryCard
             label="Last Tick"
-            value={snapshot.lastSnapshotAt ? new Date(snapshot.lastSnapshotAt).toLocaleTimeString() : '--'}
+            value={formatStreamTime(snapshot.lastTickAt || snapshot.lastSnapshotAt)}
           />
         </div>
 
@@ -835,6 +916,12 @@ export default function ScreenerPage() {
                 {foundationMessage ? <span className="text-sm text-slate-200">{foundationMessage}</span> : null}
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {journalMessage ? (
+          <div className="mt-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            {journalMessage}
           </div>
         ) : null}
 
@@ -1054,15 +1141,27 @@ export default function ScreenerPage() {
                             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Score</p>
                             <p className="mt-2 text-4xl font-black tracking-tight text-emerald-300">{row.score.toFixed(1)}</p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => copyCardMetrics(row)}
-                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-200 transition hover:bg-white/10"
-                            title="Copy card metrics as JSON"
-                          >
-                            <Copy className="h-4 w-4" />
-                            {copiedSymbol === row.symbol ? 'Copied' : 'Copy'}
-                          </button>
+                          <div className="flex flex-col items-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => addJournalTrade(row)}
+                              disabled={activeJournalSymbol === row.symbol}
+                              className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                              title="Add this paper buy to the journal"
+                            >
+                              <ShoppingCart className="h-4 w-4" />
+                              {activeJournalSymbol === row.symbol ? 'Adding...' : 'Buy'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => copyCardMetrics(row)}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-200 transition hover:bg-white/10"
+                              title="Copy card metrics as JSON"
+                            >
+                              <Copy className="h-4 w-4" />
+                              {copiedSymbol === row.symbol ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
                         </div>
                         <div className="mt-4 h-2 rounded-full bg-white/10">
                           <div
@@ -1083,6 +1182,12 @@ export default function ScreenerPage() {
                           <MiniStat label="Risk %" value={`${row.buyRecommendation.plan.riskPct.toFixed(2)}%`} accent="text-rose-300" />
                           <MiniStat label="Reward %" value={`${row.buyRecommendation.plan.rewardPct.toFixed(2)}%`} accent="text-emerald-300" />
                         </div>
+                        <Link
+                          href="/trade-tracker"
+                          className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold text-slate-200 transition hover:bg-white/10"
+                        >
+                          Open Journal
+                        </Link>
                       </div>
                     </div>
                   </div>

@@ -7,6 +7,7 @@ export interface HistoricalBuildRequest {
   interval: HistoricalInterval;
   lookbackDays: number;
   refresh?: boolean;
+  includeBenchmark?: boolean;
   category?: StockUniverseCategory | 'all';
   symbols?: string[];
   maxSymbols?: number;

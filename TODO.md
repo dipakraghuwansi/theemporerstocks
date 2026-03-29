@@ -1,40 +1,65 @@
 # Trading Intelligence Roadmap
 
-## In Progress
-- Score calibration follow-through
-  - Review research dashboard output and tune overlay multipliers from observed train/test drift.
-- Vol surface follow-through
-  - The first skew, vanna, and charm proxies are live; next pass should improve strike selection and expiry weighting.
+## Complete Foundations
+- `Stock-first platform pivot`
+  - The active app is now stock-focused, with options intelligence layered in as context instead of being the product center.
+- `Historical data platform`
+  - Day and minute foundation builders, local cache, and Mongo-backed durability are in place.
+- `Research workbench`
+  - `/research` now covers train/test drift, walk-forward consistency, regime dependency, microstructure bias summaries, coverage tracking, and options-surface diagnostics.
+- `Live microstructure stack`
+  - `full`-mode depth streaming, microprice, OFI, rolling OFI, and a VPIN-style proxy are live.
+- `Options structure stack`
+  - Stock option-chain ingestion, gamma, vanna, charm, skew, term structure, OI flow, and futures buildup are live.
+- `Journal test loop`
+  - Screener `Buy` flow, journal storage, and pseudo trade closure on SL/target are working.
+- `Mongo-backed persistence`
+  - Universe, journal, positions, research artifacts, snapshots, and caches are wired into Mongo with local hot-cache behavior where appropriate.
 
-## Next
-- Research-directed tuning
-  - Use train/test drift, regime dependency, and walk-forward spread on `/research` to tune screen weights.
-- Sector breadth hardening
-  - Move sector breadth route to the same cache-first pattern used by `/screener` so it stops flirting with Kite rate limits.
+## Complete Scoring Upgrades
+- `Centralized scoring engine`
+  - Shared scoring, factor derivation, overlays, and explainers are all unified.
+- `Normalized and ATR-aware factors`
+  - Core screen math now uses normalized and ATR-adjusted features instead of only raw heuristics.
+- `Sector breadth overlay`
+  - Sector breadth and breadth delta feed directly into ranking.
+- `Regime layer`
+  - Regime adjustments are active and now backed by persisted HMM-style learning state.
+- `Options overlay`
+  - Gamma, skew, walls, futures buildup, and flow-greek context affect scores and confidence.
+- `Microstructure overlay`
+  - Live book pressure and toxicity now affect intraday ranking and confidence.
+- `Residual alpha refinement`
+  - The alpha blend now separates beta-adjusted residuals, sector-relative return, category-relative return, and volatility-adjusted factor context.
+- `Factor-profile calibration`
+  - Factor multipliers now run through a shared research-driven profile system instead of mostly per-screen branching.
 
-## After That
-- VPIN-style toxicity proxy
-  - Current stream has a lightweight rolling proxy; next pass should switch to truer volume bucket construction using minute cache plus live deltas.
-- Vol surface refinement
-  - Move from simple window averages to skew by moneyness buckets and expiry curves.
-- Residual alpha refinement
-  - Current screener blends beta-adjusted benchmark, sector, and category context; next pass can add explicit factor baskets.
+## Ongoing Tuning
+- `Research-directed tuning`
+  - The system now has enough evidence plumbing that tuning should continue off `/research` rather than intuition.
+- `Minute-level microstructure validation`
+  - Coverage tracking is now visible, but the edge quality still depends on accumulating more live-minute history.
+- `Vol surface follow-through`
+  - Live diagnostics, snapshot capture, and first-pass outcome summaries are in place; the remaining work is growing sample depth and tuning from it.
+- `Overlay calibration follow-through`
+  - Options and microstructure overlays already use research-derived regime/bias multipliers, but weak states still need to be tightened with more evidence.
 
-## Research / Advanced
-- Regime HMM
-  - First-pass HMM-style filter is live; next pass can add learned emissions and transition re-estimation.
-- Minute-level microstructure scoring
-  - First pass is live through microstructure overlay; next pass should add minute-bucket persistence and research labels tied directly to microstructure states.
-- Score calibration
-  - First-pass calibration context is live from manifest stats; next pass should become screen-and-factor specific rather than screen-wide.
+## Next Engineering
+- `Vol surface history depth`
+  - Keep capturing options-surface snapshots during market hours so the research joins become statistically meaningful.
+- `Minute microstructure sample depth`
+  - Keep the stream running and rebuild manifests periodically so the `Unavailable` share falls and supportive/opposing buckets gain sample size.
+- `VPIN validation pass`
+  - The proxy now adapts by session phase and liquidity; the next step is judging whether that actually improves research stability and live usefulness.
+- `Richer factor cohorts`
+  - Residual/factor alpha can be improved further with sector ETFs, factor proxies, or bespoke peer cohorts when we want to deepen the cross-sectional model.
+- `Broader HMM horizon comparison`
+  - The regime learner now persists state; the next step is comparing longer-horizon persisted regime quality over time.
 
-## Done
-- Residual alpha in screener scoring.
-- Market microstructure foundation with `full` mode depth, microprice, OFI, rolling OFI, and VPIN-style proxy.
-- Futures buildup integrated into options overlay and confidence text.
-- Volatility skew from stock option chains.
-- Vanna and charm proxies from the option chain.
-- Residual alpha extended with simple factor-basket alpha.
-- HMM-style regime smoothing.
-- Minute-level microstructure scoring through the live microstructure overlay.
-- First-pass score calibration from historical research stats.
+## Nice-To-Have Later
+- `Historical options-surface backtest depth`
+  - Promote options-surface research from first-pass summaries into a much deeper historical validation loop.
+- `Direct out-of-sample factor learning`
+  - Replace more of the remaining heuristic factor shaping with stronger evidence-led calibration.
+- `More explicit model diagnostics`
+  - Add pages or panels for calibration history, factor drift, and regime-state evolution if we want more observability.

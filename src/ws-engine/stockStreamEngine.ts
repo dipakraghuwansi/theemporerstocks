@@ -1,12 +1,16 @@
 import { KiteConnect, KiteTicker } from 'kiteconnect';
 import fs from 'fs';
 import path from 'path';
+import { persistMinuteMicrostructureBuckets, MinuteMicrostructureBucket } from '@/lib/microstructureCache';
 import { getStockUniverse } from '@/lib/stockUniverseStore';
 
 const TOKEN_FILE = path.join(process.cwd(), '.kite_token');
 const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
 const OFI_WINDOW_SIZE = 12;
 const VPIN_WINDOW_SIZE = 24;
+const VOLUME_BUCKET_TARGET_SAMPLES = 40;
+const MICROSTRUCTURE_PERSIST_BATCH = 20;
+const BASE_VPIN_BUCKET_MULTIPLIER = 12;
 
 type IoLike = {
   emit: (event: string, payload: unknown) => void;
@@ -40,6 +44,7 @@ type StreamQuote = {
   orderFlowImbalance: number | null;
   rollingOfi: number | null;
   vpin: number | null;
+  tradePressureScore: number | null;
   timestamp: string;
 };
 
@@ -60,6 +65,57 @@ type FlowBucket = {
   totalVolume: number;
 };
 
+type VpinInProgressBucket = {
+  targetVolume: number;
+  signedVolume: number;
+  totalVolume: number;
+};
+
+type MinuteAccumulator = {
+  minute: string;
+  instrument: string;
+  symbol: string;
+  micropriceEdgeSum: number;
+  micropriceEdgeCount: number;
+  ofiSum: number;
+  ofiCount: number;
+  rollingOfiSum: number;
+  rollingOfiCount: number;
+  vpinSum: number;
+  vpinCount: number;
+  tradePressureSum: number;
+  tradePressureCount: number;
+  depthSampleCount: number;
+  sampleCount: number;
+};
+
+type KiteDepthLevel = {
+  price?: number;
+  quantity?: number;
+};
+
+type KiteTick = {
+  instrument_token: number;
+  last_price: number;
+  volume_traded?: number;
+  ohlc?: {
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
+  };
+  depth?: {
+    buy?: KiteDepthLevel[];
+    sell?: KiteDepthLevel[];
+  };
+};
+
+type ReconnectableTicker = KiteTicker & {
+  attemptReconnection?: () => void;
+  auto_reconnect?: boolean;
+  should_reconnect?: boolean;
+};
+
 let kiteInstance: KiteConnect | null = null;
 let tickerInstance: KiteTicker | null = null;
 let currentToken = '';
@@ -68,6 +124,7 @@ let instrumentMap = new Map<string, InstrumentMeta>();
 let subscribedTokens: number[] = [];
 let latestQuotes = new Map<string, StreamQuote>();
 let lastSnapshotAt: string | null = null;
+let lastTickAt: string | null = null;
 let currentUniverseSize = 0;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let syncIntervalStarted = false;
@@ -80,12 +137,17 @@ let previousBookState = new Map<string, BookState>();
 let ofiHistory = new Map<string, number[]>();
 let previousTradeState = new Map<string, TradeState>();
 let vpinHistory = new Map<string, FlowBucket[]>();
+let currentVpinBucket = new Map<string, VpinInProgressBucket>();
+let recentVolumeDeltas = new Map<string, number[]>();
+let minuteAccumulators = new Map<string, MinuteAccumulator>();
+let pendingMinuteBuckets: MinuteMicrostructureBucket[] = [];
+const averageIntradayVolumeDelta = new Map<string, number>();
 
 function sameTokenSet(left: number[], right: number[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function getDepthMetrics(tick: any) {
+function getDepthMetrics(tick: KiteTick) {
   const bestBid = tick.depth?.buy?.[0];
   const bestAsk = tick.depth?.sell?.[0];
 
@@ -144,6 +206,90 @@ function getOrderFlowImbalance(previous: BookState | null, current: BookState) {
 
 function getApiKey() {
   return process.env.KITE_API_KEY || '';
+}
+
+function getMinuteKey(timestamp: string) {
+  return timestamp.slice(0, 16);
+}
+
+function getSessionPhase(timestamp: string) {
+  const date = new Date(timestamp);
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+  const openMinutes = 9 * 60 + 15;
+  const closeMinutes = 15 * 60 + 30;
+
+  if (totalMinutes < openMinutes || totalMinutes > closeMinutes) return 'offhours';
+  if (totalMinutes <= openMinutes + 45) return 'open';
+  if (totalMinutes >= closeMinutes - 45) return 'close';
+  return 'mid';
+}
+
+function getSessionPhaseMultiplier(phase: ReturnType<typeof getSessionPhase>) {
+  switch (phase) {
+    case 'open':
+      return 1.35;
+    case 'close':
+      return 1.15;
+    case 'mid':
+      return 0.9;
+    default:
+      return 1;
+  }
+}
+
+function getLiquidityProfileMultiplier(avgVolumeDelta: number) {
+  if (avgVolumeDelta >= 50000) return 1.4;
+  if (avgVolumeDelta >= 10000) return 1.2;
+  if (avgVolumeDelta >= 2500) return 1;
+  if (avgVolumeDelta >= 500) return 0.85;
+  return 0.7;
+}
+
+function getAdaptiveVpinBucketTarget(instrument: string, timestamp: string, fallbackAverage: number) {
+  const avgDelta = averageIntradayVolumeDelta.get(instrument) || fallbackAverage || 1;
+  const phaseMultiplier = getSessionPhaseMultiplier(getSessionPhase(timestamp));
+  const liquidityMultiplier = getLiquidityProfileMultiplier(avgDelta);
+  return Math.max(
+    Math.round(avgDelta * BASE_VPIN_BUCKET_MULTIPLIER * phaseMultiplier * liquidityMultiplier),
+    1
+  );
+}
+
+function flushMinuteAccumulator(instrument: string) {
+  const accumulator = minuteAccumulators.get(instrument);
+  if (!accumulator || accumulator.sampleCount === 0) return;
+
+  pendingMinuteBuckets.push({
+    symbol: accumulator.symbol,
+    instrument: accumulator.instrument,
+    minute: accumulator.minute,
+    averageMicropriceEdgePct:
+      accumulator.micropriceEdgeCount > 0
+        ? Number((accumulator.micropriceEdgeSum / accumulator.micropriceEdgeCount).toFixed(4))
+        : null,
+    averageOrderFlowImbalance:
+      accumulator.ofiCount > 0 ? Number((accumulator.ofiSum / accumulator.ofiCount).toFixed(2)) : null,
+    averageRollingOfi:
+      accumulator.rollingOfiCount > 0
+        ? Number((accumulator.rollingOfiSum / accumulator.rollingOfiCount).toFixed(2))
+        : null,
+    averageVpin:
+      accumulator.vpinCount > 0 ? Number((accumulator.vpinSum / accumulator.vpinCount).toFixed(3)) : null,
+    averageTradePressureScore:
+      accumulator.tradePressureCount > 0
+        ? Number((accumulator.tradePressureSum / accumulator.tradePressureCount).toFixed(3))
+        : null,
+    depthSampleCount: accumulator.depthSampleCount,
+    tradePressureCount: accumulator.tradePressureCount,
+    sampleCount: accumulator.sampleCount,
+  });
+
+  if (pendingMinuteBuckets.length >= MICROSTRUCTURE_PERSIST_BATCH) {
+    persistMinuteMicrostructureBuckets(pendingMinuteBuckets);
+    pendingMinuteBuckets = [];
+  }
 }
 
 export function getSavedKiteToken(): string | null {
@@ -215,6 +361,7 @@ function emitSnapshot() {
     universeSize: currentUniverseSize,
     subscribed: subscribedTokens.length,
     lastSnapshotAt,
+    lastTickAt,
     quotes,
   });
 }
@@ -225,6 +372,7 @@ export function getStockStreamSnapshot() {
     universeSize: currentUniverseSize,
     subscribed: subscribedTokens.length,
     lastSnapshotAt,
+    lastTickAt,
     lastUniverseSyncAt,
     lastConnectAttemptAt,
     lastError,
@@ -271,6 +419,15 @@ async function subscribeUniverse(options: { force?: boolean } = {}) {
   vpinHistory = new Map(
     Array.from(vpinHistory.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
   );
+  currentVpinBucket = new Map(
+    Array.from(currentVpinBucket.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  recentVolumeDeltas = new Map(
+    Array.from(recentVolumeDeltas.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
+  minuteAccumulators = new Map(
+    Array.from(minuteAccumulators.entries()).filter(([instrument]) => allowedInstruments.has(instrument))
+  );
   lastUniverseSyncAt = new Date().toISOString();
 
   if (nextTokens.length === 0) {
@@ -286,7 +443,7 @@ async function subscribeUniverse(options: { force?: boolean } = {}) {
 }
 
 function attachTickerHandlers(ticker: KiteTicker) {
-  ticker.on('ticks', (ticks: any[]) => {
+  ticker.on('ticks', (ticks: KiteTick[]) => {
     const now = new Date().toISOString();
 
     for (const tick of ticks) {
@@ -337,16 +494,56 @@ function attachTickerHandlers(ticker: KiteTicker) {
               : orderFlowImbalance !== null
                 ? Math.sign(orderFlowImbalance)
                 : 0;
-      const nextVpinHistory = vpinHistory.get(meta.instrument) || [];
+      const nextVolumeDeltas = recentVolumeDeltas.get(meta.instrument) || [];
       if (volumeDelta > 0) {
-        nextVpinHistory.push({
-          signedVolume: volumeDelta * direction,
-          totalVolume: volumeDelta,
-        });
+        nextVolumeDeltas.push(volumeDelta);
       }
-      while (nextVpinHistory.length > VPIN_WINDOW_SIZE) {
-        nextVpinHistory.shift();
+      while (nextVolumeDeltas.length > VOLUME_BUCKET_TARGET_SAMPLES) {
+        nextVolumeDeltas.shift();
       }
+      recentVolumeDeltas.set(meta.instrument, nextVolumeDeltas);
+      const trailingAverageDelta =
+        nextVolumeDeltas.length > 0
+          ? nextVolumeDeltas.reduce((sum, value) => sum + value, 0) / nextVolumeDeltas.length
+          : 1;
+      averageIntradayVolumeDelta.set(meta.instrument, trailingAverageDelta);
+      const tradePressureScore =
+        direction !== 0 && volumeDelta > 0
+          ? Number((direction * Math.log1p(volumeDelta / Math.max(trailingAverageDelta, 1))).toFixed(3))
+          : null;
+      const bucketTarget = getAdaptiveVpinBucketTarget(meta.instrument, now, trailingAverageDelta);
+      const nextVpinHistory = vpinHistory.get(meta.instrument) || [];
+      let activeBucket = currentVpinBucket.get(meta.instrument) || {
+        targetVolume: bucketTarget,
+        signedVolume: 0,
+        totalVolume: 0,
+      };
+      let remainingVolume = volumeDelta;
+
+      while (remainingVolume > 0) {
+        const room = Math.max(activeBucket.targetVolume - activeBucket.totalVolume, 0);
+        const fill = Math.min(room || activeBucket.targetVolume, remainingVolume);
+        activeBucket.totalVolume += fill;
+        activeBucket.signedVolume += fill * direction;
+        remainingVolume -= fill;
+
+        if (activeBucket.totalVolume >= activeBucket.targetVolume) {
+          nextVpinHistory.push({
+            signedVolume: activeBucket.signedVolume,
+            totalVolume: activeBucket.totalVolume,
+          });
+          while (nextVpinHistory.length > VPIN_WINDOW_SIZE) {
+            nextVpinHistory.shift();
+          }
+          activeBucket = {
+            targetVolume: bucketTarget,
+            signedVolume: 0,
+            totalVolume: 0,
+          };
+        }
+      }
+
+      currentVpinBucket.set(meta.instrument, activeBucket);
       vpinHistory.set(meta.instrument, nextVpinHistory);
       previousTradeState.set(meta.instrument, {
         lastPrice,
@@ -356,6 +553,54 @@ function attachTickerHandlers(ticker: KiteTicker) {
       const totalSignedImbalance = nextVpinHistory.reduce((sum, item) => sum + Math.abs(item.signedVolume), 0);
       const vpin =
         totalBucketVolume > 0 ? Number((totalSignedImbalance / totalBucketVolume).toFixed(3)) : null;
+      const minuteKey = getMinuteKey(now);
+      const existingAccumulator = minuteAccumulators.get(meta.instrument);
+      if (existingAccumulator && existingAccumulator.minute !== minuteKey) {
+        flushMinuteAccumulator(meta.instrument);
+        minuteAccumulators.delete(meta.instrument);
+      }
+      const accumulator = minuteAccumulators.get(meta.instrument) || {
+        minute: minuteKey,
+        instrument: meta.instrument,
+        symbol: meta.symbol,
+        micropriceEdgeSum: 0,
+        micropriceEdgeCount: 0,
+        ofiSum: 0,
+        ofiCount: 0,
+        rollingOfiSum: 0,
+        rollingOfiCount: 0,
+        vpinSum: 0,
+        vpinCount: 0,
+        tradePressureSum: 0,
+        tradePressureCount: 0,
+        depthSampleCount: 0,
+        sampleCount: 0,
+      };
+      if (depth.bestBidPrice !== null && depth.bestAskPrice !== null) {
+        accumulator.depthSampleCount += 1;
+      }
+      if (micropriceEdgePct !== null) {
+        accumulator.micropriceEdgeSum += micropriceEdgePct;
+        accumulator.micropriceEdgeCount += 1;
+      }
+      if (orderFlowImbalance !== null) {
+        accumulator.ofiSum += orderFlowImbalance;
+        accumulator.ofiCount += 1;
+      }
+      if (rollingOfi !== null) {
+        accumulator.rollingOfiSum += rollingOfi;
+        accumulator.rollingOfiCount += 1;
+      }
+      if (vpin !== null) {
+        accumulator.vpinSum += vpin;
+        accumulator.vpinCount += 1;
+      }
+      if (tradePressureScore !== null) {
+        accumulator.tradePressureSum += tradePressureScore;
+        accumulator.tradePressureCount += 1;
+      }
+      accumulator.sampleCount += 1;
+      minuteAccumulators.set(meta.instrument, accumulator);
 
       latestQuotes.set(meta.instrument, {
         instrumentToken,
@@ -377,10 +622,12 @@ function attachTickerHandlers(ticker: KiteTicker) {
         orderFlowImbalance,
         rollingOfi,
         vpin,
+        tradePressureScore,
         timestamp: now,
       });
     }
 
+    lastTickAt = now;
     lastSnapshotAt = now;
     emitSnapshot();
   });
@@ -395,6 +642,13 @@ function attachTickerHandlers(ticker: KiteTicker) {
   ticker.on('disconnect', () => {
     console.log('[Stock Stream] Kite ticker disconnected.');
     tickerConnected = false;
+    for (const instrument of minuteAccumulators.keys()) {
+      flushMinuteAccumulator(instrument);
+    }
+    if (pendingMinuteBuckets.length > 0) {
+      persistMinuteMicrostructureBuckets(pendingMinuteBuckets);
+      pendingMinuteBuckets = [];
+    }
     emitSnapshot();
   });
 
@@ -429,8 +683,9 @@ function connectTicker() {
     access_token: currentToken,
   });
 
-  const originalAttemptReconnection = (ticker as any).attemptReconnection;
-  (ticker as any).attemptReconnection = function patchedAttemptReconnection() {
+  const reconnectableTicker = ticker as ReconnectableTicker;
+  const originalAttemptReconnection = reconnectableTicker.attemptReconnection;
+  reconnectableTicker.attemptReconnection = function patchedAttemptReconnection() {
     if (!this.auto_reconnect || this.should_reconnect === false) {
       console.log('[Stock Stream] Suppressed KiteTicker process.exit on disconnect.');
       return;

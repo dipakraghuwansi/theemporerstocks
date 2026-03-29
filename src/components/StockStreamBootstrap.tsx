@@ -1,38 +1,54 @@
 "use client";
 
 import { useEffect } from 'react';
+import {
+  isStockStreamTokenSyncPending,
+  STOCK_STREAM_TOKEN_SYNC_EVENT,
+  syncStockStreamToken,
+} from '@/lib/stockStreamTokenSync';
+
+let bootstrapSyncStarted = false;
 
 export default function StockStreamBootstrap() {
   useEffect(() => {
-    let cancelled = false;
-    let lastSyncedToken = '';
-
-    const syncToken = async () => {
+    const runTokenSync = async (force = false) => {
       try {
-        const tokenRes = await fetch('/api/kite/token', { cache: 'no-store' });
-        const tokenData = await tokenRes.json();
-        const token = tokenData?.token;
-
-        if (!token || cancelled) return;
-        if (token === lastSyncedToken) return;
-
-        await fetch('http://localhost:8080/set-token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
-        });
-        lastSyncedToken = token;
+        await syncStockStreamToken({ force });
       } catch (error) {
         console.error('Failed to sync Kite token to stock websocket engine', error);
       }
     };
 
-    syncToken();
-    const interval = window.setInterval(syncToken, 5 * 60_000);
+    const handleSyncRequest = (event: Event) => {
+      const force = Boolean((event as CustomEvent<{ force?: boolean }>).detail?.force);
+      void runTokenSync(force);
+    };
+
+    const handleWindowFocus = () => {
+      if (isStockStreamTokenSyncPending()) {
+        void runTokenSync();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isStockStreamTokenSyncPending()) {
+        void runTokenSync();
+      }
+    };
+
+    if (!bootstrapSyncStarted) {
+      bootstrapSyncStarted = true;
+      void runTokenSync();
+    }
+
+    window.addEventListener(STOCK_STREAM_TOKEN_SYNC_EVENT, handleSyncRequest as EventListener);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+      window.removeEventListener(STOCK_STREAM_TOKEN_SYNC_EVENT, handleSyncRequest as EventListener);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 

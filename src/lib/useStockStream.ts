@@ -23,6 +23,7 @@ export interface StockStreamQuote {
   orderFlowImbalance: number | null;
   rollingOfi: number | null;
   vpin: number | null;
+  tradePressureScore: number | null;
   timestamp: string;
 }
 
@@ -31,6 +32,7 @@ export interface StockStreamSnapshot {
   universeSize: number;
   subscribed: number;
   lastSnapshotAt: string | null;
+  lastTickAt?: string | null;
   lastUniverseSyncAt?: string | null;
   lastConnectAttemptAt?: string | null;
   lastError?: string | null;
@@ -42,6 +44,7 @@ const EMPTY_SNAPSHOT: StockStreamSnapshot = {
   universeSize: 0,
   subscribed: 0,
   lastSnapshotAt: null,
+  lastTickAt: null,
   quotes: [],
 };
 

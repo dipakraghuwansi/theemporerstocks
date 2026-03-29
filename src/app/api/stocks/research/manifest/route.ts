@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readManifest } from '@/lib/historical/cache';
-import { readDataset } from '@/lib/historical/cache';
+import { ensureDatasetHydrated, ensureManifestHydrated, readManifest } from '@/lib/historical/cache';
 import { readResearchManifest, writeResearchManifest } from '@/lib/research/cache';
 import { buildOutcomeLabels } from '@/lib/research/labels';
 import { buildResearchManifest } from '@/lib/research/stats';
@@ -19,7 +18,7 @@ export async function GET() {
 
 export async function POST(_request: NextRequest) {
   try {
-    const foundationManifest = readManifest('day');
+    const foundationManifest = readManifest('day') || await ensureManifestHydrated('day');
     if (!foundationManifest || foundationManifest.entries.length === 0) {
       return NextResponse.json(
         { error: 'No daily historical foundation found. Build /api/stocks/research/foundation first.' },
@@ -29,18 +28,22 @@ export async function POST(_request: NextRequest) {
 
     const datasets = foundationManifest.entries
       .filter((entry) => entry.status !== 'error')
-      .map((entry) => readDataset('day', entry.symbol))
+      .map((entry) => ensureDatasetHydrated('day', entry.symbol))
+    const resolvedDatasets = await Promise.all(datasets);
+    const normalizedDayDatasets = resolvedDatasets
       .filter((dataset): dataset is NonNullable<typeof dataset> => Boolean(dataset));
 
-    const minuteFoundationManifest = readManifest('minute');
-    const minuteDatasets = minuteFoundationManifest
+    const minuteFoundationManifest = readManifest('minute') || await ensureManifestHydrated('minute');
+    const minuteDatasetPromises = minuteFoundationManifest
       ? minuteFoundationManifest.entries
           .filter((entry) => entry.status !== 'error')
-          .map((entry) => readDataset('minute', entry.symbol))
-          .filter((dataset): dataset is NonNullable<typeof dataset> => Boolean(dataset))
+          .map((entry) => ensureDatasetHydrated('minute', entry.symbol))
       : [];
+    const minuteResolvedDatasets = await Promise.all(minuteDatasetPromises);
+    const minuteDatasets = minuteResolvedDatasets
+      .filter((dataset): dataset is NonNullable<typeof dataset> => Boolean(dataset));
 
-    const labels = buildOutcomeLabels(datasets, minuteDatasets);
+    const labels = buildOutcomeLabels(normalizedDayDatasets, minuteDatasets);
     const manifest = buildResearchManifest(labels);
     writeResearchManifest(manifest);
 
@@ -52,6 +55,7 @@ export async function POST(_request: NextRequest) {
         'Returns include simple execution friction via slippage and cost assumptions.',
         'Train/test, walk-forward, and regime-segmented summaries are included in the manifest.',
         'If minute foundation data exists, intraday momentum labels are built from minute candles.',
+        'Captured options-surface snapshots are joined to labels when available, so skew and gamma regimes can be summarized in research.',
         'Targets, stops, and lookahead windows are screen-specific and ATR-scaled.',
       ],
     });

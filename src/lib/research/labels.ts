@@ -1,16 +1,18 @@
 import { HistoricalDatasetFile } from '@/lib/historical/types';
+import { getLatestOptionSurfaceSnapshot } from '@/lib/optionsStructure/history';
 import { screenMatches } from '@/lib/screener/screens';
-import { buildCalibrationContext, createScreenerScorePayload } from '@/lib/screener';
 import { ScreenerBaseMetrics } from '@/lib/screener/types';
 import { StockScreenType } from '@/lib/stockUniverse';
 import { calculateAtr, calculatePercentChange, calculateRsi, calculateSma, highest, lowest } from '@/lib/stockIndicators';
 import { ScreenOutcomeLabel } from '@/lib/research/types';
 import { getTradePlan as getRecommendationTradePlan } from '@/lib/research/recommendation';
+import { readMinuteMicrostructureBuckets } from '@/lib/microstructureCache';
 
 const SCREENS: StockScreenType[] = ['intraday-momentum', 'swing-setups', 'mean-reversion', 'breakout-watchlist'];
 const BENCHMARK_SYMBOL = 'NIFTY50_BENCHMARK';
 const DEFAULT_SLIPPAGE_PCT = 0.15;
 const DEFAULT_COST_PCT = 0.1;
+const TRADE_PRESSURE_SUPPORT_THRESHOLD = 0.12;
 
 function getSplit(index: number, total: number): 'train' | 'test' {
   return index / Math.max(total, 1) < 0.7 ? 'train' : 'test';
@@ -193,6 +195,7 @@ function evaluateOutcome(
       ? Number(calculatePercentChange(benchmarkExit.close, benchmarkEntry.close).toFixed(2))
       : 0;
   const excessReturnPct = Number((netReturnPct - benchmarkReturnPct).toFixed(2));
+  const optionSurface = getLatestOptionSurfaceSnapshot(dataset.symbol, entryBar.date);
 
   return {
     screen,
@@ -218,10 +221,55 @@ function evaluateOutcome(
     netReturnPct,
     slippagePct: DEFAULT_SLIPPAGE_PCT,
     costPct: DEFAULT_COST_PCT,
+    atmIv: optionSurface?.atmIv ?? null,
+    nearAtmVolSkew: optionSurface?.nearAtmVolSkew ?? null,
+    termStructureSlope: optionSurface?.termStructureSlope ?? null,
+    volSkewRegime: (optionSurface?.volSkewRegime as 'put_fear' | 'call_chasing' | 'balanced' | 'unavailable' | undefined) ?? 'unavailable',
+    gammaRegime: (optionSurface?.gammaRegime as 'stabilizing' | 'expansive' | 'neutral' | 'unavailable' | undefined) ?? 'unavailable',
     hitTarget,
     hitStop,
     win: hitTarget || (!hitStop && netReturnPct > benchmarkReturnPct),
   };
+}
+
+function getMicrostructureBias(bucket: ReturnType<typeof readMinuteMicrostructureBuckets>[number] | null) {
+  if (!bucket) {
+    return {
+      bias: 'unavailable',
+      source: 'unavailable',
+    } as const;
+  }
+
+  if (bucket.averageMicropriceEdgePct !== null && bucket.averageRollingOfi !== null) {
+    return {
+      bias:
+        bucket.averageMicropriceEdgePct > 0 && bucket.averageRollingOfi > 0
+          ? 'supportive'
+          : bucket.averageMicropriceEdgePct < 0 && bucket.averageRollingOfi < 0
+            ? 'opposing'
+            : 'mixed',
+      source: 'depth',
+    } as const;
+  }
+
+  const tradePressureScore = bucket.averageTradePressureScore ?? null;
+  const enoughFallbackSamples = (bucket.tradePressureCount ?? 0) >= 2 || bucket.sampleCount >= 3;
+  if (!enoughFallbackSamples || tradePressureScore === null) {
+    return {
+      bias: 'unavailable',
+      source: 'unavailable',
+    } as const;
+  }
+
+  return {
+    bias:
+      tradePressureScore >= TRADE_PRESSURE_SUPPORT_THRESHOLD
+        ? 'supportive'
+        : tradePressureScore <= -TRADE_PRESSURE_SUPPORT_THRESHOLD
+          ? 'opposing'
+          : 'mixed',
+    source: 'trade_pressure',
+  } as const;
 }
 
 function buildIntradayMomentumLabels(datasets: HistoricalDatasetFile[]) {
@@ -229,6 +277,9 @@ function buildIntradayMomentumLabels(datasets: HistoricalDatasetFile[]) {
 
   for (const dataset of datasets) {
     if (dataset.symbol === BENCHMARK_SYMBOL || dataset.interval !== 'minute' || dataset.candles.length < 90) continue;
+    const microstructureMap = new Map(
+      readMinuteMicrostructureBuckets(dataset.symbol).map((row) => [row.minute.slice(0, 16), row])
+    );
 
     for (let index = 50; index < dataset.candles.length - 13; index++) {
       const window = dataset.candles.slice(0, index + 1);
@@ -249,6 +300,11 @@ function buildIntradayMomentumLabels(datasets: HistoricalDatasetFile[]) {
           ? avgVolume20Raw.reduce((sum, value) => sum + value, 0) / avgVolume20Raw.length
           : null;
       const atrScale = atr14 || Math.max(current.close * 0.003, 0.5);
+      const minuteKey = current.date.slice(0, 16);
+      const microstructure = microstructureMap.get(minuteKey) || null;
+      const optionSurface = getLatestOptionSurfaceSnapshot(dataset.symbol, nextBar.date);
+      const microstructureClassification = getMicrostructureBias(microstructure);
+      const microstructureBias = microstructureClassification.bias;
 
       const matched = Boolean(
         sma20 !== null &&
@@ -261,7 +317,8 @@ function buildIntradayMomentumLabels(datasets: HistoricalDatasetFile[]) {
           rsi14 <= 78 &&
           current.close > previous.close &&
           current.volume > (avgVolume20 || 0) * 1.2 &&
-          nextBar.close > current.close
+          nextBar.close > current.close &&
+          (microstructureBias === 'unavailable' || microstructureBias !== 'opposing')
       );
 
       if (!matched) continue;
@@ -312,6 +369,17 @@ function buildIntradayMomentumLabels(datasets: HistoricalDatasetFile[]) {
         netReturnPct,
         slippagePct: DEFAULT_SLIPPAGE_PCT,
         costPct: DEFAULT_COST_PCT,
+        micropriceEdgePct: microstructure?.averageMicropriceEdgePct ?? null,
+        rollingOfi: microstructure?.averageRollingOfi ?? null,
+        vpin: microstructure?.averageVpin ?? null,
+        tradePressureScore: microstructure?.averageTradePressureScore ?? null,
+        microstructureBias,
+        microstructureSource: microstructureClassification.source,
+        atmIv: optionSurface?.atmIv ?? null,
+        nearAtmVolSkew: optionSurface?.nearAtmVolSkew ?? null,
+        termStructureSlope: optionSurface?.termStructureSlope ?? null,
+        volSkewRegime: (optionSurface?.volSkewRegime as 'put_fear' | 'call_chasing' | 'balanced' | 'unavailable' | undefined) ?? 'unavailable',
+        gammaRegime: (optionSurface?.gammaRegime as 'stabilizing' | 'expansive' | 'neutral' | 'unavailable' | undefined) ?? 'unavailable',
         hitTarget,
         hitStop,
         win: netReturnPct > 0,
@@ -339,22 +407,6 @@ export function buildOutcomeLabels(datasets: HistoricalDatasetFile[], minuteData
     }
 
     if (metricsRows.length === 0) continue;
-    const payload = createScreenerScorePayload(
-      metricsRows,
-      {},
-      {},
-      {
-        name: 'mixed',
-        label: 'Mixed Regime',
-        confidence: 0.5,
-        benchmarkDayChangePct: 0,
-        benchmarkAboveSma20: false,
-        benchmarkReturn20d: 0,
-        advancingBreadthPct: 50,
-        aboveSma20Pct: 50,
-      },
-      buildCalibrationContext(null)
-    );
 
     for (const screen of SCREENS) {
       for (const [index, metrics] of indexedMetrics.entries()) {

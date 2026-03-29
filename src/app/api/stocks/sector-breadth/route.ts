@@ -5,15 +5,14 @@ import { getKiteInstance } from '@/lib/kiteHelper';
 import { calculatePercentChange, calculateSma } from '@/lib/stockIndicators';
 import { StockUniverseCategory } from '@/lib/stockUniverse';
 import { getStockUniverse } from '@/lib/stockUniverseStore';
+import { readDataset } from '@/lib/historical/cache';
+import {
+  hydrateSectorBreadthSnapshotFromMongoIfNeeded,
+  persistSectorBreadthSnapshotToMongo,
+  seedSectorBreadthMongoFromFileIfNeeded,
+} from '@/lib/mongoBackedCache';
 
-const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
-const DAY_MS = 24 * 60 * 60 * 1000;
 const SNAPSHOT_PATH = path.join(process.cwd(), 'sector_breadth_snapshot.json');
-
-type InstrumentMeta = {
-  instrumentToken: number;
-  instrument: string;
-};
 
 type StockBaseMetric = {
   symbol: string;
@@ -31,48 +30,16 @@ type SectorSnapshot = {
   generatedAt: string;
 };
 
-let instrumentCache: Map<string, InstrumentMeta> | null = null;
-let instrumentCacheAt = 0;
 let baseMetricCache: StockBaseMetric[] | null = null;
 let baseMetricCacheAt = 0;
 const CACHE_MS = 5 * 60 * 1000;
 
-async function getInstrumentMap() {
-  const now = Date.now();
-  if (instrumentCache && now - instrumentCacheAt < 12 * 60 * 60 * 1000) {
-    return instrumentCache;
-  }
-
-  const response = await fetch(INSTRUMENTS_URL, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error('Failed to fetch Kite instruments CSV.');
-  }
-
-  const csvText = await response.text();
-  const lines = csvText.split('\n');
-  const nextMap = new Map<string, InstrumentMeta>();
-
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
-    if (cols.length < 12) continue;
-
-    const instrumentToken = parseInt(cols[0]?.replace(/"/g, '') || '0', 10);
-    const tradingsymbol = cols[2]?.replace(/"/g, '').trim();
-    const segment = cols[10]?.replace(/"/g, '').trim();
-    const exchange = cols[11]?.replace(/"/g, '').trim();
-
-    if (!instrumentToken || !tradingsymbol || exchange !== 'NSE' || segment !== 'NSE') continue;
-
-    nextMap.set(`NSE:${tradingsymbol}`, {
-      instrumentToken,
-      instrument: `NSE:${tradingsymbol}`,
-    });
-  }
-
-  instrumentCache = nextMap;
-  instrumentCacheAt = now;
-  return instrumentCache;
-}
+seedSectorBreadthMongoFromFileIfNeeded().catch((error) => {
+  console.error('Failed to seed sector breadth snapshot into Mongo', error);
+});
+hydrateSectorBreadthSnapshotFromMongoIfNeeded().catch((error) => {
+  console.error('Failed to hydrate sector breadth snapshot from Mongo', error);
+});
 
 function ensureSnapshotFile() {
   if (!fs.existsSync(SNAPSHOT_PATH)) {
@@ -93,42 +60,34 @@ function readPreviousSnapshot() {
 
 function writeSnapshot(snapshot: SectorSnapshot[]) {
   fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(snapshot, null, 2), 'utf8');
+  persistSectorBreadthSnapshotToMongo(snapshot).catch((error) => {
+    console.error('Failed to persist sector breadth snapshot to Mongo', error);
+  });
 }
 
-async function getBaseMetrics(kite: any, instrumentMap: Map<string, InstrumentMeta>) {
+async function getBaseMetrics() {
   const now = Date.now();
   if (baseMetricCache && now - baseMetricCacheAt < CACHE_MS) {
     return baseMetricCache;
   }
 
   const universe = getStockUniverse();
-  const mapped = universe
-    .map((item) => {
-      const meta = instrumentMap.get(item.instrument);
-      return meta ? { ...item, instrumentToken: meta.instrumentToken } : null;
-    })
-    .filter(Boolean) as Array<(ReturnType<typeof getStockUniverse>[number]) & { instrumentToken: number }>;
+  const metrics = universe.map((item) => {
+    const dataset = readDataset('day', item.symbol);
+    const candles = dataset?.candles || [];
+    if (candles.length < 20) return null;
 
-  const today = new Date().toISOString().split('T')[0];
-  const fromDaily = new Date(Date.now() - 40 * DAY_MS).toISOString().split('T')[0];
+    const closes = candles.map((candle) => candle.close);
+    const sma20 = calculateSma(closes, 20);
 
-  const metrics = await Promise.all(
-    mapped.map(async (item) => {
-      const candles = await kite.getHistoricalData(item.instrumentToken, 'day', fromDaily, today, false).catch(() => []);
-      if (!candles || candles.length < 20) return null;
-
-      const closes = candles.map((candle: any) => candle.close);
-      const sma20 = calculateSma(closes, 20);
-
-      return {
-        symbol: item.symbol,
-        instrument: item.instrument,
-        sector: item.sector,
-        category: item.category,
-        sma20,
-      } satisfies StockBaseMetric;
-    })
-  );
+    return {
+      symbol: item.symbol,
+      instrument: item.instrument,
+      sector: item.sector,
+      category: item.category,
+      sma20,
+    } satisfies StockBaseMetric;
+  });
 
   const normalizedMetrics = metrics.filter((item): item is StockBaseMetric => Boolean(item));
   baseMetricCache = normalizedMetrics;
@@ -144,11 +103,19 @@ export async function GET(_request: NextRequest) {
     }
 
     const kite = getKiteInstance(token) as any;
-    const instrumentMap = await getInstrumentMap();
     const previousSnapshot = readPreviousSnapshot();
     const previousMap = new Map(previousSnapshot.map((row) => [row.sector, row]));
 
-    const baseMetrics = await getBaseMetrics(kite, instrumentMap);
+    const baseMetrics = await getBaseMetrics();
+    if (baseMetrics.length === 0) {
+      return NextResponse.json(
+        {
+          error: 'No cached day-history is available for sector breadth. Build /api/stocks/research/foundation with interval=day first.',
+        },
+        { status: 409 }
+      );
+    }
+
     const quotes = await kite.getQuote(baseMetrics.map((item) => item.instrument));
     const sectorMap = new Map<
       string,
@@ -235,7 +202,7 @@ export async function GET(_request: NextRequest) {
       sectors: rows,
       notes: [
         'Breadth delta is measured against the previous saved sector breadth snapshot.',
-        'Above-SMA20 uses cached daily history and is refreshed on a short cache window.',
+        'Above-SMA20 uses local cached daily history instead of live historical API pulls.',
         'Default ordering is strongest breadth upgrade to strongest breadth degradation.',
       ],
     });

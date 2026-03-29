@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { DEFAULT_STOCK_UNIVERSE, StockUniverseCategory, StockUniverseItem } from '@/lib/stockUniverse';
+import {
+  hydrateStockUniverseFromMongoIfNeeded,
+  persistStockUniverseToMongo,
+  seedStockUniverseMongoFromFileIfNeeded,
+} from '@/lib/mongoBackedCache';
 
 const DB_PATH = path.join(process.cwd(), 'stock_universe.json');
 
@@ -18,6 +23,13 @@ function ensureUniverseFile() {
     fs.writeFileSync(DB_PATH, JSON.stringify(DEFAULT_STOCK_UNIVERSE, null, 2), 'utf8');
   }
 }
+
+seedStockUniverseMongoFromFileIfNeeded().catch((error) => {
+  console.error('Failed to seed stock universe into Mongo', error);
+});
+hydrateStockUniverseFromMongoIfNeeded().catch((error) => {
+  console.error('Failed to hydrate stock universe from Mongo', error);
+});
 
 function normalizeSymbol(symbol: string) {
   return symbol.trim().toUpperCase();
@@ -68,6 +80,9 @@ export function saveStockUniverse(items: StockUniverseItem[]) {
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
   fs.writeFileSync(DB_PATH, JSON.stringify(normalized, null, 2), 'utf8');
+  persistStockUniverseToMongo(normalized).catch((error) => {
+    console.error('Failed to persist stock universe to Mongo', error);
+  });
   return normalized;
 }
 

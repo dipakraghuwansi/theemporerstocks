@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { CATEGORY_LABELS, StockUniverseCategory, StockUniverseItem } from '@/lib/stockUniverse';
 import { DatabaseZap, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { syncStockStreamToken } from '@/lib/stockStreamTokenSync';
 import { useStockStream } from '@/lib/useStockStream';
 
 type UniverseResponse = {
@@ -142,6 +143,9 @@ export default function UniversePage() {
     setError('');
 
     try {
+      await syncStockStreamToken({ force: true }).catch((error) => {
+        console.warn(`Token sync before ${action} failed`, error);
+      });
       const res = await fetch('http://localhost:8080/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

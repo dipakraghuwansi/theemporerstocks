@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { FutureContractMeta, OptionContractMeta, OptionStructureRequest, OptionStructureSummary } from '@/lib/optionsStructure/types';
+import {
+  hydrateOptionStructureSnapshotsFromMongoIfNeeded,
+  persistOptionStructureSnapshotsToMongo,
+  seedOptionStructureMongoFromFileIfNeeded,
+} from '@/lib/mongoBackedCache';
 
 const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
 const RISK_FREE_RATE = 0.08;
@@ -27,6 +32,13 @@ type StoredSnapshot = {
 
 type SnapshotStore = Record<string, StoredSnapshot>;
 
+seedOptionStructureMongoFromFileIfNeeded().catch((error) => {
+  console.error('Failed to seed option structure snapshots into Mongo', error);
+});
+hydrateOptionStructureSnapshotsFromMongoIfNeeded().catch((error) => {
+  console.error('Failed to hydrate option structure snapshots from Mongo', error);
+});
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
@@ -45,6 +57,9 @@ function readSnapshotStore(): SnapshotStore {
 
 function writeSnapshotStore(store: SnapshotStore) {
   fs.writeFileSync(SNAPSHOT_PATH, JSON.stringify(store, null, 2), 'utf8');
+  persistOptionStructureSnapshotsToMongo(store).catch((error) => {
+    console.error('Failed to persist option structure snapshots to Mongo', error);
+  });
 }
 
 function normPdf(value: number) {
@@ -332,8 +347,13 @@ function buildUnavailableSummary(symbol: string, spotPrice: number, reason: stri
     charmRegime: 'unavailable',
     averageCallIv: null,
     averagePutIv: null,
+    atmIv: null,
+    nearAtmVolSkew: null,
+    wingCallIv: null,
+    wingPutIv: null,
     volSkew: null,
     volSkewRegime: 'unavailable',
+    termStructureSlope: null,
     gammaFlipLevel: null,
     callWall: null,
     putWall: null,
@@ -363,7 +383,14 @@ function createSummaryFromQuotes(
   contracts: OptionContractMeta[],
   quotes: Record<string, any>,
   previousSnapshot: StoredSnapshot | null,
-  futureQuote: any | null
+  futureQuote: any | null,
+  nextExpiryAtmPair:
+    | {
+        expiry: string;
+        callInstrument: string | null;
+        putInstrument: string | null;
+      }
+    | null = null
 ) {
   const timeToExpiry = getTimeToExpiryYears(expiry);
   const strikeMap = new Map<number, { callOi: number; putOi: number; callOiChange: number; putOiChange: number; callIv: number | null; putIv: number | null; netGammaExposure: number }>();
@@ -452,12 +479,49 @@ function createSummaryFromQuotes(
   const gammaSkew = grossGammaExposure > 0 ? netGammaExposure / grossGammaExposure : null;
   const averageCallIv = weightedCallIvOi > 0 ? weightedCallIvSum / weightedCallIvOi : null;
   const averagePutIv = weightedPutIvOi > 0 ? weightedPutIvSum / weightedPutIvOi : null;
+  const nearAtmRows = strikeSummaries.filter((row) => Math.abs(row.strike - spotPrice) / spotPrice <= 0.015);
+  const wingPutRows = strikeSummaries.filter((row) => row.strike < spotPrice * 0.97 && row.putIv !== null);
+  const wingCallRows = strikeSummaries.filter((row) => row.strike > spotPrice * 1.03 && row.callIv !== null);
+  const atmIvRows = nearAtmRows.flatMap((row) => [row.callIv, row.putIv].filter((value): value is number => value !== null));
+  const atmIv = atmIvRows.length > 0 ? atmIvRows.reduce((sum, value) => sum + value, 0) / atmIvRows.length : null;
+  const wingPutIv =
+    wingPutRows.length > 0
+      ? wingPutRows.reduce((sum, row) => sum + (row.putIv || 0), 0) / wingPutRows.length
+      : null;
+  const wingCallIv =
+    wingCallRows.length > 0
+      ? wingCallRows.reduce((sum, row) => sum + (row.callIv || 0), 0) / wingCallRows.length
+      : null;
+  const nearAtmVolSkew =
+    wingPutIv !== null && wingCallIv !== null ? wingPutIv - wingCallIv : null;
   const volSkew =
-    averageCallIv !== null && averagePutIv !== null ? averagePutIv - averageCallIv : null;
+    nearAtmVolSkew !== null
+      ? nearAtmVolSkew
+      : averageCallIv !== null && averagePutIv !== null
+        ? averagePutIv - averageCallIv
+        : null;
+  const nextExpiryAtmIvs = nextExpiryAtmPair
+    ? [nextExpiryAtmPair.callInstrument, nextExpiryAtmPair.putInstrument]
+        .map((instrument) => (instrument ? quotes[instrument] : null))
+        .filter(Boolean)
+        .map((quote: any) =>
+          inferImpliedVolatility(
+            String(quote.tradingsymbol || '').includes('PE') ? 'PE' : 'CE',
+            Number(quote.last_price || 0),
+            spotPrice,
+            atmStrike || spotPrice,
+            getTimeToExpiryYears(nextExpiryAtmPair.expiry)
+          )
+        )
+    : [];
+  const nextExpiryAtmIv =
+    nextExpiryAtmIvs.length > 0 ? nextExpiryAtmIvs.reduce((sum, value) => sum + value, 0) / nextExpiryAtmIvs.length : null;
+  const termStructureSlope =
+    atmIv !== null && nextExpiryAtmIv !== null ? nextExpiryAtmIv - atmIv : null;
   const volSkewRegime =
     volSkew === null
       ? 'unavailable'
-      : volSkew >= 0.03
+      : volSkew >= 0.025
         ? 'put_fear'
         : volSkew <= -0.02
           ? 'call_chasing'
@@ -553,7 +617,7 @@ function createSummaryFromQuotes(
           : 0;
   const skewSentence =
     volSkewRegime === 'put_fear'
-      ? ` Put IV is running richer than calls by ${((volSkew || 0) * 100).toFixed(1)} vol points, which suggests protection demand is elevated.`
+        ? ` Put IV is running richer than calls by ${((volSkew || 0) * 100).toFixed(1)} vol points, which suggests protection demand is elevated.`
       : volSkewRegime === 'call_chasing'
         ? ` Call IV is running richer than puts by ${Math.abs((volSkew || 0) * 100).toFixed(1)} vol points, which suggests upside chasing is showing up.`
         : volSkewRegime === 'balanced'
@@ -589,8 +653,13 @@ function createSummaryFromQuotes(
     charmRegime,
     averageCallIv: averageCallIv !== null ? Number((averageCallIv * 100).toFixed(2)) : null,
     averagePutIv: averagePutIv !== null ? Number((averagePutIv * 100).toFixed(2)) : null,
+    atmIv: atmIv !== null ? Number((atmIv * 100).toFixed(2)) : null,
+    nearAtmVolSkew: nearAtmVolSkew !== null ? Number((nearAtmVolSkew * 100).toFixed(2)) : null,
+    wingCallIv: wingCallIv !== null ? Number((wingCallIv * 100).toFixed(2)) : null,
+    wingPutIv: wingPutIv !== null ? Number((wingPutIv * 100).toFixed(2)) : null,
     volSkew: volSkew !== null ? Number((volSkew * 100).toFixed(2)) : null,
     volSkewRegime,
+    termStructureSlope: termStructureSlope !== null ? Number((termStructureSlope * 100).toFixed(2)) : null,
     gammaFlipLevel,
     callWall,
     putWall,
@@ -632,6 +701,13 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
     atmStrike: number | null;
     contracts: OptionContractMeta[];
     futureInstrument: string | null;
+    nextExpiryAtmPair:
+      | {
+          expiry: string;
+          callInstrument: string | null;
+          putInstrument: string | null;
+        }
+      | null;
   }> = [];
 
   for (const request of cleanRequests) {
@@ -657,6 +733,7 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
       )
     ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
     const expiry = validExpiries[0];
+    const nextExpiry = validExpiries[1] || null;
     if (!expiry) {
       const unavailable = buildUnavailableSummary(request.symbol, request.spotPrice, 'Listed options exist, but no active future expiry was found.');
       result[request.symbol] = unavailable;
@@ -669,6 +746,23 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
     const futureInstrument = sameExpiryFutures[0]?.instrument || null;
     const { selectedStrikes, atmStrike } = normalizeStrikeWindow(sameExpiry, request.spotPrice);
     const selectedContracts = sameExpiry.filter((contract) => selectedStrikes.has(contract.strike));
+    const nextExpiryContracts = nextExpiry
+      ? listed.filter((contract) => contract.expiry === nextExpiry)
+      : [];
+    const nextExpiryAtmPair =
+      nextExpiry && atmStrike !== null
+        ? {
+            expiry: nextExpiry,
+            callInstrument:
+              nextExpiryContracts.find(
+                (contract) => contract.optionType === 'CE' && contract.strike === atmStrike
+              )?.instrument || null,
+            putInstrument:
+              nextExpiryContracts.find(
+                (contract) => contract.optionType === 'PE' && contract.strike === atmStrike
+              )?.instrument || null,
+          }
+        : null;
 
     if (selectedContracts.length === 0) {
       const unavailable = buildUnavailableSummary(request.symbol, request.spotPrice, 'No contracts were selected in the active strike window.');
@@ -681,6 +775,8 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
     if (futureInstrument) {
       quoteSymbols.add(futureInstrument);
     }
+    if (nextExpiryAtmPair?.callInstrument) quoteSymbols.add(nextExpiryAtmPair.callInstrument);
+    if (nextExpiryAtmPair?.putInstrument) quoteSymbols.add(nextExpiryAtmPair.putInstrument);
     pendingRequests.push({
       symbol: request.symbol,
       spotPrice: request.spotPrice,
@@ -688,6 +784,7 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
       atmStrike,
       contracts: selectedContracts,
       futureInstrument,
+      nextExpiryAtmPair,
     });
   }
 
@@ -704,7 +801,8 @@ export async function buildOptionStructureBatch(kite: any, requests: OptionStruc
       pending.contracts,
       quotes,
       previousSnapshot,
-      pending.futureInstrument ? quotes[pending.futureInstrument] || null : null
+      pending.futureInstrument ? quotes[pending.futureInstrument] || null : null,
+      pending.nextExpiryAtmPair
     );
     result[pending.symbol] = summary;
     setCachedSummary(pending.symbol, pending.spotPrice, summary);

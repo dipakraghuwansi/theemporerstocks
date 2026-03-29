@@ -53,15 +53,19 @@ export function getMicrostructureOverlay(
 
   let toxicityPenalty = 0;
   if (vpin !== null) {
-    if (vpin >= 0.8) toxicityPenalty = 4;
-    else if (vpin >= 0.65) toxicityPenalty = 2;
-    else if (vpin <= 0.3 && screen === 'intraday-momentum') toxicityPenalty = -1;
+    if (vpin >= 0.8) toxicityPenalty = screen === 'intraday-momentum' ? 6 : 4;
+    else if (vpin >= 0.65) toxicityPenalty = screen === 'intraday-momentum' ? 3 : 2;
+    else if (vpin <= 0.3 && screen === 'intraday-momentum') toxicityPenalty = -1.5;
   }
 
   const signedAlignment = toSigned(edge) + toSigned(rolling);
   const bias: MicrostructureBias =
     signedAlignment >= 2 ? 'supportive' : signedAlignment <= -2 ? 'opposing' : 'mixed';
-  const adjustment = Number(((raw - toxicityPenalty) * calibration).toFixed(1));
+  const evidenceMultiplier = payload.calibrationContext[screen]?.microstructureBiasMultipliers?.[bias] ?? 1;
+  if (screen === 'intraday-momentum' && bias === 'opposing') {
+    raw -= 2.5;
+  }
+  const adjustment = Number(((raw - toxicityPenalty) * calibration * evidenceMultiplier).toFixed(1));
   const toxicityLabel = vpin === null ? 'n/a' : `${(vpin * 100).toFixed(0)}% tox`;
 
   return {
@@ -70,9 +74,9 @@ export function getMicrostructureOverlay(
     displayValue: `${edge.toFixed(3)}% / ${rolling.toLocaleString()} / ${toxicityLabel}`,
     explanation:
       bias === 'supportive'
-        ? `Depth-weighted pressure is supportive with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, and VPIN proxy ${toxicityLabel}.`
+        ? `Depth-weighted pressure is supportive with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, VPIN proxy ${toxicityLabel}, and evidence multiplier ${evidenceMultiplier.toFixed(2)}.`
         : bias === 'opposing'
-          ? `Depth-weighted pressure is opposing with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, and VPIN proxy ${toxicityLabel}.`
-          : `Depth-weighted pressure is mixed with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, and VPIN proxy ${toxicityLabel}.`,
+          ? `Depth-weighted pressure is opposing with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, VPIN proxy ${toxicityLabel}, and evidence multiplier ${evidenceMultiplier.toFixed(2)}.`
+          : `Depth-weighted pressure is mixed with microprice edge ${edge.toFixed(3)}%, rolling OFI ${rolling.toLocaleString()}, VPIN proxy ${toxicityLabel}, and evidence multiplier ${evidenceMultiplier.toFixed(2)}.`,
   };
 }

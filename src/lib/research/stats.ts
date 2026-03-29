@@ -1,10 +1,14 @@
 import { StockScreenType } from '@/lib/stockUniverse';
 import {
+  MicrostructureCoverageSummary,
+  MicrostructureResearchSummary,
   ProbabilityEstimate,
   ResearchManifest,
   ScreenOutcomeLabel,
   ScreenResearchSummary,
+  ScreenStabilitySummary,
   SymbolResearchStats,
+  VolSurfaceResearchSummary,
 } from '@/lib/research/types';
 
 const SCREENS: StockScreenType[] = ['intraday-momentum', 'swing-setups', 'mean-reversion', 'breakout-watchlist'];
@@ -51,6 +55,11 @@ function summarizeByDimension(
       return acc;
     }, new Map())
   );
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 export function buildResearchManifest(labels: ScreenOutcomeLabel[]): ResearchManifest {
@@ -106,6 +115,175 @@ export function buildResearchManifest(labels: ScreenOutcomeLabel[]): ResearchMan
     };
   });
 
+  const stabilitySummary: ScreenStabilitySummary[] = SCREENS.map((screen) => {
+    const train = splitSummary.find((row) => row.screen === screen && row.split === 'train');
+    const test = splitSummary.find((row) => row.screen === screen && row.split === 'test');
+    const regimes = regimeSummary.filter((row) => row.screen === screen);
+    const walkForward = walkForwardSummary.filter((row) => row.screen === screen);
+    const regimeExpectancies = regimes.map((row) => row.expectancyPct);
+    const walkForwardExpectancies = walkForward.map((row) => row.expectancyPct);
+    const regimeSpread =
+      regimeExpectancies.length > 1 ? Math.max(...regimeExpectancies) - Math.min(...regimeExpectancies) : 0;
+    const walkForwardSpread =
+      walkForwardExpectancies.length > 1 ? Math.max(...walkForwardExpectancies) - Math.min(...walkForwardExpectancies) : 0;
+    const drift = (test?.expectancyPct ?? 0) - (train?.expectancyPct ?? 0);
+    const stabilityScore = Math.max(
+      0,
+      Math.min(
+        100,
+        100 -
+          Math.abs(drift) * 12 -
+          walkForwardSpread * 8 -
+          regimeSpread * 6 +
+          (test?.netExpectancyPct ?? 0) * 4
+      )
+    );
+
+    return {
+      screen,
+      trainExpectancyPct: Number((train?.expectancyPct ?? 0).toFixed(2)),
+      testExpectancyPct: Number((test?.expectancyPct ?? 0).toFixed(2)),
+      trainNetExpectancyPct: Number((train?.netExpectancyPct ?? 0).toFixed(2)),
+      testNetExpectancyPct: Number((test?.netExpectancyPct ?? 0).toFixed(2)),
+      driftPct: Number(drift.toFixed(2)),
+      walkForwardSpreadPct: Number(walkForwardSpread.toFixed(2)),
+      regimeSpreadPct: Number(regimeSpread.toFixed(2)),
+      stabilityScore: Number(stabilityScore.toFixed(1)),
+    };
+  });
+
+  const microstructureSummary: MicrostructureResearchSummary[] = Array.from(
+    labels.reduce<Map<string, ScreenOutcomeLabel[]>>((acc, label) => {
+      if (label.interval !== 'minute') return acc;
+      const bias = label.microstructureBias || 'unavailable';
+      const key = `${label.screen}:${bias}`;
+      const rows = acc.get(key) || [];
+      rows.push(label);
+      acc.set(key, rows);
+      return acc;
+    }, new Map())
+  ).map(([key, grouped]) => {
+    const [screen, bias] = key.split(':') as [StockScreenType, MicrostructureResearchSummary['bias']];
+    const summary = summarizeLabels(screen, grouped);
+    const vpinValues = grouped
+      .map((label) => label.vpin)
+      .filter((value): value is number => value !== null && value !== undefined);
+    const microEdgeValues = grouped
+      .map((label) => label.micropriceEdgePct)
+      .filter((value): value is number => value !== null && value !== undefined);
+    const rollingOfiValues = grouped
+      .map((label) => label.rollingOfi)
+      .filter((value): value is number => value !== null && value !== undefined);
+    const tradePressureValues = grouped
+      .map((label) => label.tradePressureScore)
+      .filter((value): value is number => value !== null && value !== undefined);
+
+    return {
+      screen,
+      bias,
+      sampleSize: summary.sampleSize,
+      wins: summary.wins,
+      losses: summary.losses,
+      winRate: summary.winRate,
+      expectancyPct: summary.expectancyPct,
+      netExpectancyPct: summary.netExpectancyPct,
+      avgVpin: vpinValues.length > 0 ? Number(average(vpinValues).toFixed(3)) : null,
+      avgMicropriceEdgePct: microEdgeValues.length > 0 ? Number(average(microEdgeValues).toFixed(4)) : null,
+      avgRollingOfi: rollingOfiValues.length > 0 ? Number(average(rollingOfiValues).toFixed(2)) : null,
+      avgTradePressureScore: tradePressureValues.length > 0 ? Number(average(tradePressureValues).toFixed(3)) : null,
+    };
+  });
+
+  const microstructureCoverageSummary: MicrostructureCoverageSummary[] = SCREENS.map((screen) => {
+    const minuteRows = labels.filter((label) => label.screen === screen && label.interval === 'minute');
+    const coveredLabels = minuteRows.filter((label) => label.microstructureBias && label.microstructureBias !== 'unavailable').length;
+    const unavailableLabels = minuteRows.length - coveredLabels;
+    return {
+      screen,
+      totalMinuteLabels: minuteRows.length,
+      coveredLabels,
+      unavailableLabels,
+      coveragePct: minuteRows.length > 0 ? Number(((coveredLabels / minuteRows.length) * 100).toFixed(1)) : 0,
+    };
+  });
+
+  const volSurfaceSummary: VolSurfaceResearchSummary[] = [
+    ...Array.from(
+      labels.reduce<Map<string, ScreenOutcomeLabel[]>>((acc, label) => {
+        const regime = label.volSkewRegime || 'unavailable';
+        const key = `${label.screen}:vol_skew:${regime}`;
+        const rows = acc.get(key) || [];
+        rows.push(label);
+        acc.set(key, rows);
+        return acc;
+      }, new Map())
+    ).map(([key, grouped]) => {
+      const [screen, family, regime] = key.split(':') as [StockScreenType, 'vol_skew', string];
+      const summary = summarizeLabels(screen, grouped);
+      const atmIvValues = grouped
+        .map((label) => label.atmIv)
+        .filter((value): value is number => value !== null && value !== undefined);
+      const skewValues = grouped
+        .map((label) => label.nearAtmVolSkew)
+        .filter((value): value is number => value !== null && value !== undefined);
+      const termValues = grouped
+        .map((label) => label.termStructureSlope)
+        .filter((value): value is number => value !== null && value !== undefined);
+
+      return {
+        screen,
+        family,
+        regime,
+        sampleSize: summary.sampleSize,
+        wins: summary.wins,
+        losses: summary.losses,
+        winRate: summary.winRate,
+        expectancyPct: summary.expectancyPct,
+        netExpectancyPct: summary.netExpectancyPct,
+        avgAtmIv: atmIvValues.length > 0 ? Number(average(atmIvValues).toFixed(2)) : null,
+        avgNearAtmSkew: skewValues.length > 0 ? Number(average(skewValues).toFixed(2)) : null,
+        avgTermSlope: termValues.length > 0 ? Number(average(termValues).toFixed(2)) : null,
+      };
+    }),
+    ...Array.from(
+      labels.reduce<Map<string, ScreenOutcomeLabel[]>>((acc, label) => {
+        const regime = label.gammaRegime || 'unavailable';
+        const key = `${label.screen}:gamma:${regime}`;
+        const rows = acc.get(key) || [];
+        rows.push(label);
+        acc.set(key, rows);
+        return acc;
+      }, new Map())
+    ).map(([key, grouped]) => {
+      const [screen, family, regime] = key.split(':') as [StockScreenType, 'gamma', string];
+      const summary = summarizeLabels(screen, grouped);
+      const atmIvValues = grouped
+        .map((label) => label.atmIv)
+        .filter((value): value is number => value !== null && value !== undefined);
+      const skewValues = grouped
+        .map((label) => label.nearAtmVolSkew)
+        .filter((value): value is number => value !== null && value !== undefined);
+      const termValues = grouped
+        .map((label) => label.termStructureSlope)
+        .filter((value): value is number => value !== null && value !== undefined);
+
+      return {
+        screen,
+        family,
+        regime,
+        sampleSize: summary.sampleSize,
+        wins: summary.wins,
+        losses: summary.losses,
+        winRate: summary.winRate,
+        expectancyPct: summary.expectancyPct,
+        netExpectancyPct: summary.netExpectancyPct,
+        avgAtmIv: atmIvValues.length > 0 ? Number(average(atmIvValues).toFixed(2)) : null,
+        avgNearAtmSkew: skewValues.length > 0 ? Number(average(skewValues).toFixed(2)) : null,
+        avgTermSlope: termValues.length > 0 ? Number(average(termValues).toFixed(2)) : null,
+      };
+    }),
+  ];
+
   return {
     generatedAt: new Date().toISOString(),
     interval: 'mixed',
@@ -120,6 +298,10 @@ export function buildResearchManifest(labels: ScreenOutcomeLabel[]): ResearchMan
     splitSummary,
     regimeSummary,
     walkForwardSummary,
+    stabilitySummary,
+    microstructureSummary,
+    microstructureCoverageSummary,
+    volSurfaceSummary,
     labels,
   };
 }

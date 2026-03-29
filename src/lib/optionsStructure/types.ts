@@ -57,8 +57,13 @@ export interface OptionStructureSummary {
   charmRegime: FlowGreekRegime;
   averageCallIv: number | null;
   averagePutIv: number | null;
+  atmIv: number | null;
+  nearAtmVolSkew: number | null;
+  wingCallIv: number | null;
+  wingPutIv: number | null;
   volSkew: number | null;
   volSkewRegime: VolSkewRegime;
+  termStructureSlope: number | null;
   gammaFlipLevel: number | null;
   callWall: number | null;
   putWall: number | null;

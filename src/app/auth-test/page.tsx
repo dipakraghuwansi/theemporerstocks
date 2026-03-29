@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, KeyRound, RefreshCw, Wifi, WifiOff, XCircle } from "lucide-react";
+import { syncStockStreamToken } from "@/lib/stockStreamTokenSync";
 import { useStockStream } from "@/lib/useStockStream";
 
 const HINDALCO_INSTRUMENT = "NSE:HINDALCO";
@@ -92,12 +93,23 @@ export default function AuthTestPage() {
   }, []);
 
   const liveHindalco = snapshot.quotes.find((item) => item.instrument === HINDALCO_INSTRUMENT);
+  const formatStreamTime = (value?: string | null) =>
+    value
+      ? new Date(value).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      : "--";
 
   const runStreamAction = async (action: "reconnect" | "resubscribe") => {
     setIsRunningStreamAction(true);
     setStreamActionError("");
 
     try {
+      await syncStockStreamToken({ force: true }).catch((error) => {
+        console.warn(`Token sync before ${action} failed`, error);
+      });
       const res = await fetch("http://localhost:8080/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -243,12 +255,12 @@ export default function AuthTestPage() {
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <MetricCard label="Universe Size" value={snapshot.universeSize} />
                 <MetricCard label="Subscribed" value={snapshot.subscribed} />
-                <MetricCard label="Last Tick" value={snapshot.lastSnapshotAt ? new Date(snapshot.lastSnapshotAt).toLocaleTimeString() : "--"} />
-                <MetricCard label="Universe Sync" value={snapshot.lastUniverseSyncAt ? new Date(snapshot.lastUniverseSyncAt).toLocaleTimeString() : "--"} />
+                <MetricCard label="Last Tick" value={formatStreamTime(snapshot.lastTickAt || snapshot.lastSnapshotAt)} />
+                <MetricCard label="Universe Sync" value={formatStreamTime(snapshot.lastUniverseSyncAt)} />
               </div>
 
               <div className="mt-4 grid grid-cols-1 gap-3 text-sm">
-                <MetricCard label="Last Connect Attempt" value={snapshot.lastConnectAttemptAt ? new Date(snapshot.lastConnectAttemptAt).toLocaleTimeString() : "--"} />
+                <MetricCard label="Last Connect Attempt" value={formatStreamTime(snapshot.lastConnectAttemptAt)} />
                 <MetricCard label="Last Stream Error" value={snapshot.lastError || "None"} />
               </div>
             </div>

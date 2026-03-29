@@ -30,6 +30,7 @@ export interface ScreenerBaseMetrics {
   orderFlowImbalance: number | null;
   rollingOfi: number | null;
   vpin: number | null;
+  beta20?: number | null;
   relativeStrength20d: number | null;
   residualAlpha20d: number | null;
   factorBasketAlpha20d: number | null;

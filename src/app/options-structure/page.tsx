@@ -35,8 +35,13 @@ type OptionStructureSummary = {
   charmRegime: "supportive" | "dragging" | "balanced" | "unavailable";
   averageCallIv: number | null;
   averagePutIv: number | null;
+  atmIv: number | null;
+  nearAtmVolSkew: number | null;
+  wingCallIv: number | null;
+  wingPutIv: number | null;
   volSkew: number | null;
   volSkewRegime: "put_fear" | "call_chasing" | "balanced" | "unavailable";
+  termStructureSlope: number | null;
   gammaFlipLevel: number | null;
   callWall: number | null;
   putWall: number | null;
@@ -86,7 +91,12 @@ const EXPLAINERS: Record<string, string> = {
   "Gamma Flip": "Approximate strike where the net gamma map changes sign.",
   "Call IV": "OI-weighted average implied volatility across the selected call strikes in the active expiry window.",
   "Put IV": "OI-weighted average implied volatility across the selected put strikes in the active expiry window.",
+  "ATM IV": "Average implied volatility around the near-at-the-money strikes in the active expiry.",
+  "Wing Put IV": "Average implied volatility across downside put wings in the active expiry slice.",
+  "Wing Call IV": "Average implied volatility across upside call wings in the active expiry slice.",
+  "Near ATM Skew": "Difference between downside wing put IV and upside wing call IV near the active trading zone.",
   "Vol Skew": "Put IV minus call IV. Positive means protection is being bid harder than upside calls.",
+  "Term Slope": "Next expiry ATM IV minus front expiry ATM IV. Positive means forward volatility is richer than the front.",
   "Skew Regime": "Quick interpretation of whether the chain is showing protection demand, upside chasing, or balance.",
   Vanna: "Second-order Greek proxy for how delta shifts as implied volatility moves.",
   Charm: "Second-order Greek proxy for how delta decays with time passing toward expiry.",
@@ -255,7 +265,12 @@ export default function OptionsStructurePage() {
                 <MetricRow label="PCR" value={summary.putCallRatio?.toFixed(2) || "n/a"} />
                 <MetricRow label="Call IV" value={summary.averageCallIv?.toFixed(2) ? `${summary.averageCallIv.toFixed(2)}%` : "n/a"} />
                 <MetricRow label="Put IV" value={summary.averagePutIv?.toFixed(2) ? `${summary.averagePutIv.toFixed(2)}%` : "n/a"} />
+                <MetricRow label="ATM IV" value={summary.atmIv?.toFixed(2) ? `${summary.atmIv.toFixed(2)}%` : "n/a"} />
+                <MetricRow label="Wing Put IV" value={summary.wingPutIv?.toFixed(2) ? `${summary.wingPutIv.toFixed(2)}%` : "n/a"} />
+                <MetricRow label="Wing Call IV" value={summary.wingCallIv?.toFixed(2) ? `${summary.wingCallIv.toFixed(2)}%` : "n/a"} />
+                <MetricRow label="Near ATM Skew" value={summary.nearAtmVolSkew?.toFixed(2) ? `${summary.nearAtmVolSkew.toFixed(2)} pts` : "n/a"} />
                 <MetricRow label="Vol Skew" value={summary.volSkew?.toFixed(2) ? `${summary.volSkew.toFixed(2)} pts` : "n/a"} />
+                <MetricRow label="Term Slope" value={summary.termStructureSlope?.toFixed(2) ? `${summary.termStructureSlope.toFixed(2)} pts` : "n/a"} />
                 <MetricRow label="Skew Regime" value={summary.volSkewRegime.replace('_', ' ')} />
                 <MetricRow label="Vanna" value={summary.netVannaExposure.toLocaleString(undefined, { maximumFractionDigits: 0 })} />
                 <MetricRow label="Charm" value={summary.netCharmExposure.toLocaleString(undefined, { maximumFractionDigits: 0 })} />

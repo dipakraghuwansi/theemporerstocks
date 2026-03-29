@@ -1,6 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import { HistoricalDatasetFile, HistoricalInterval, HistoricalManifest } from '@/lib/historical/types';
+import {
+  hydrateHistoricalDatasetFromMongo,
+  hydrateHistoricalManifestFromMongo,
+  persistHistoricalDatasetToMongo,
+  persistHistoricalManifestToMongo,
+} from '@/lib/mongoBackedCache';
+import { isMongoConnectivityError } from '@/lib/mongo';
 
 const CACHE_ROOT = path.join(process.cwd(), 'historical_cache');
 
@@ -39,6 +46,9 @@ export function readDataset(interval: HistoricalInterval, symbol: string) {
 export function writeDataset(dataset: HistoricalDatasetFile) {
   const filePath = getDatasetPath(dataset.interval, dataset.symbol);
   fs.writeFileSync(filePath, JSON.stringify(dataset), 'utf8');
+  persistHistoricalDatasetToMongo(dataset).catch((error) => {
+    console.error(`Failed to persist historical dataset ${dataset.interval}:${dataset.symbol} to Mongo`, error);
+  });
   return filePath;
 }
 
@@ -61,7 +71,56 @@ export function readManifest(interval: HistoricalInterval) {
 export function writeManifest(manifest: HistoricalManifest) {
   const manifestPath = getManifestPath(manifest.interval);
   fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
+  persistHistoricalManifestToMongo(manifest).catch((error) => {
+    console.error(`Failed to persist historical manifest ${manifest.interval} to Mongo`, error);
+  });
   return manifestPath;
+}
+
+export async function ensureDatasetHydrated(interval: HistoricalInterval, symbol: string) {
+  const existing = readDataset(interval, symbol);
+  if (existing) return existing;
+
+  let dataset: HistoricalDatasetFile | null;
+
+  try {
+    dataset = await hydrateHistoricalDatasetFromMongo(interval, symbol);
+  } catch (error) {
+    if (isMongoConnectivityError(error)) {
+      console.warn(`Historical dataset hydrate fell back to cache miss for ${interval}:${symbol}`, error);
+      return null;
+    }
+
+    throw error;
+  }
+
+  if (!dataset) return null;
+
+  writeDataset(dataset);
+  return dataset;
+}
+
+export async function ensureManifestHydrated(interval: HistoricalInterval) {
+  const existing = readManifest(interval);
+  if (existing) return existing;
+
+  let manifest: HistoricalManifest | null;
+
+  try {
+    manifest = await hydrateHistoricalManifestFromMongo(interval);
+  } catch (error) {
+    if (isMongoConnectivityError(error)) {
+      console.warn(`Historical manifest hydrate fell back to cache miss for ${interval}`, error);
+      return null;
+    }
+
+    throw error;
+  }
+
+  if (!manifest) return null;
+
+  writeManifest(manifest);
+  return manifest;
 }
 
 function formatBytes(bytes: number) {

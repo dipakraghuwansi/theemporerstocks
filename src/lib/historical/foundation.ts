@@ -10,7 +10,7 @@ import {
   HistoricalManifestEntry,
   HistoricalUniverseSelection,
 } from '@/lib/historical/types';
-import { readDataset, readManifest, writeDataset, writeManifest } from '@/lib/historical/cache';
+import { ensureDatasetHydrated, ensureManifestHydrated, readDataset, readManifest, writeDataset, writeManifest } from '@/lib/historical/cache';
 
 const INSTRUMENTS_URL = 'https://api.kite.trade/instruments';
 const HISTORICAL_REQUESTS_PER_SECOND = 3;
@@ -18,6 +18,25 @@ const MIN_REQUEST_GAP_MS = Math.ceil(1000 / HISTORICAL_REQUESTS_PER_SECOND) + 40
 const MAX_RETRIES = 3;
 const NIFTY_50_TOKEN = 256265;
 const BENCHMARK_SYMBOL = 'NIFTY50_BENCHMARK';
+
+type HistoricalApiRow = {
+  date: string | Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
+type KiteHistoricalClient = {
+  getHistoricalData: (
+    instrumentToken: number,
+    interval: HistoricalBuildRequest['interval'],
+    from: string,
+    to: string,
+    continuous: boolean
+  ) => Promise<HistoricalApiRow[]>;
+};
 
 let instrumentCache: Map<string, HistoricalInstrumentMeta> | null = null;
 let instrumentCacheAt = 0;
@@ -47,7 +66,7 @@ function getDateRange(lookbackDays: number) {
   };
 }
 
-function normalizeCandles(rows: any[]): HistoricalCandle[] {
+function normalizeCandles(rows: HistoricalApiRow[]): HistoricalCandle[] {
   return rows.map((row) => ({
     date: new Date(row.date).toISOString(),
     open: row.open,
@@ -100,7 +119,6 @@ function selectUniverse(
 ) {
   const universe = getStockUniverse();
   const symbolSet = request.symbols?.length ? new Set(request.symbols.map((symbol) => symbol.trim().toUpperCase())) : null;
-
   const filtered = universe
     .filter((item) => (request.category && request.category !== 'all' ? item.category === request.category : true))
     .filter((item) => (symbolSet ? symbolSet.has(item.symbol) : true))
@@ -111,10 +129,30 @@ function selectUniverse(
     .filter((item): item is HistoricalUniverseSelection => Boolean(item))
     .sort((a, b) => a.symbol.localeCompare(b.symbol));
 
-  const selected = request.maxSymbols ? filtered.slice(0, request.maxSymbols) : filtered;
+  const selectedMap = new Map(filtered.map((item) => [item.symbol, item]));
 
-  if (request.interval === 'day' && !request.symbols?.length) {
-    selected.unshift({
+  if (symbolSet) {
+    for (const symbol of symbolSet) {
+      if (selectedMap.has(symbol) || symbol === BENCHMARK_SYMBOL) continue;
+      const instrument = `NSE:${symbol}`;
+      const meta = instrumentMap.get(instrument);
+      if (!meta) continue;
+
+      selectedMap.set(symbol, {
+        symbol,
+        instrument,
+        sector: 'Unknown',
+        category: 'manual',
+        instrumentToken: meta.instrumentToken,
+      });
+    }
+  }
+
+  const selected = Array.from(selectedMap.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const limited = request.maxSymbols !== undefined ? selected.slice(0, request.maxSymbols) : selected;
+
+  if (request.interval === 'day' && (request.includeBenchmark || !request.symbols?.length)) {
+    limited.unshift({
       symbol: BENCHMARK_SYMBOL,
       instrument: 'NSE:NIFTY 50',
       sector: 'Benchmark',
@@ -124,7 +162,7 @@ function selectUniverse(
     });
   }
 
-  return selected;
+  return limited;
 }
 
 function datasetSatisfiesRequest(
@@ -137,23 +175,23 @@ function datasetSatisfiesRequest(
 }
 
 async function fetchHistoricalWithRetry(
-  kite: any,
+  kite: KiteHistoricalClient,
   selection: HistoricalUniverseSelection,
   from: string,
   to: string,
   interval: HistoricalBuildRequest['interval']
 ) {
   let attempt = 0;
-  let lastError: any = null;
+  let lastError: unknown = null;
 
   while (attempt < MAX_RETRIES) {
     try {
       await paceHistoricalRequests();
       const rows = await kite.getHistoricalData(selection.instrumentToken, interval, from, to, false);
       return normalizeCandles(rows || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
-      const message = String(error?.message || error || '');
+      const message = error instanceof Error ? error.message : String(error || '');
 
       if (message.includes('TokenException') || message.includes('403')) {
         throw new Error('Kite session expired. Please login again.');
@@ -172,8 +210,13 @@ async function fetchHistoricalWithRetry(
   throw lastError || new Error(`Failed historical fetch for ${selection.symbol}`);
 }
 
-async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): Promise<HistoricalBuildResult> {
-  const kite = getKiteInstance(request.token) as any;
+async function buildHistoricalDatasetInternal(
+  request: HistoricalBuildRequest,
+  options?: {
+    persistManifest?: boolean;
+  }
+): Promise<HistoricalBuildResult> {
+  const kite = getKiteInstance(request.token) as unknown as KiteHistoricalClient;
   const instrumentMap = await getInstrumentMap();
   const selections = selectUniverse(request, instrumentMap);
   const { from, to } = getDateRange(request.lookbackDays);
@@ -182,7 +225,7 @@ async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): 
   const entries: HistoricalManifestEntry[] = [];
 
   for (const selection of selections) {
-    const cached = readDataset(request.interval, selection.symbol);
+    const cached = readDataset(request.interval, selection.symbol) || await ensureDatasetHydrated(request.interval, selection.symbol);
     if (!request.refresh && datasetSatisfiesRequest(cached, from, to)) {
       entries.push({
         symbol: selection.symbol,
@@ -230,7 +273,7 @@ async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): 
         candleCount: candles.length,
         status: 'fetched',
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       entries.push({
         symbol: selection.symbol,
         instrument: selection.instrument,
@@ -243,7 +286,7 @@ async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): 
         fetchedAt: new Date().toISOString(),
         candleCount: 0,
         status: 'error',
-        error: error?.message || `Failed to fetch ${selection.symbol}`,
+        error: error instanceof Error ? error.message : `Failed to fetch ${selection.symbol}`,
       });
     }
   }
@@ -257,7 +300,9 @@ async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): 
     entries,
   };
 
-  writeManifest(manifest);
+  if (options?.persistManifest !== false) {
+    writeManifest(manifest);
+  }
 
   return {
     generatedAt,
@@ -272,18 +317,23 @@ async function buildHistoricalDatasetInternal(request: HistoricalBuildRequest): 
   };
 }
 
-export async function buildHistoricalDataset(request: HistoricalBuildRequest) {
+export async function buildHistoricalDataset(
+  request: HistoricalBuildRequest,
+  options?: {
+    persistManifest?: boolean;
+  }
+) {
   if (activeBuild) {
     return activeBuild;
   }
 
-  activeBuild = buildHistoricalDatasetInternal(request).finally(() => {
+  activeBuild = buildHistoricalDatasetInternal(request, options).finally(() => {
     activeBuild = null;
   });
 
   return activeBuild;
 }
 
-export function getHistoricalFoundationStatus(interval: HistoricalBuildRequest['interval']) {
-  return readManifest(interval);
+export async function getHistoricalFoundationStatus(interval: HistoricalBuildRequest['interval']) {
+  return readManifest(interval) || await ensureManifestHydrated(interval);
 }

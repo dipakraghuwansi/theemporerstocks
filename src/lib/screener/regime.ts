@@ -79,27 +79,33 @@ export function getRegimeAdjustment(screen: StockScreenType, payload: ScreenerSc
       ? screen === 'intraday-momentum'
         ? 8
         : screen === 'breakout-watchlist'
-          ? 6
+          ? 5
           : screen === 'swing-setups'
-            ? 5
+            ? 6
             : -4
       : regime.name === 'risk-off'
         ? screen === 'mean-reversion'
           ? 6
+          : screen === 'breakout-watchlist'
+            ? -8
           : screen === 'swing-setups'
-            ? -4
+            ? -5
             : -7
         : regime.name === 'rebound'
           ? screen === 'mean-reversion'
             ? 8
             : screen === 'swing-setups'
-              ? 3
+              ? 4
               : screen === 'breakout-watchlist'
-                ? -1
-                : 2
+                ? 0
+                : 1
           : screen === 'mean-reversion'
             ? 1
-            : 0;
+            : screen === 'intraday-momentum'
+              ? -3
+              : screen === 'breakout-watchlist'
+                ? -1
+              : 0;
 
   return Number((regimeBias * regime.confidence).toFixed(1));
 }

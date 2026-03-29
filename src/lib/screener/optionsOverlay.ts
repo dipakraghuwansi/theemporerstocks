@@ -21,6 +21,10 @@ export function getOptionsAdjustment(
   }
 
   const calibration = payload.calibrationContext[screen]?.optionsMultiplier ?? 1;
+  const volSkewEvidenceMultiplier =
+    payload.calibrationContext[screen]?.optionsRegimeMultipliers?.volSkew?.[options.volSkewRegime] ?? 1;
+  const gammaEvidenceMultiplier =
+    payload.calibrationContext[screen]?.optionsRegimeMultipliers?.gamma?.[options.gammaRegime] ?? 1;
 
   const atr = metrics.atr14 || Math.max(metrics.lastPrice * 0.01, 1);
   const resistanceAtr =
@@ -42,9 +46,13 @@ export function getOptionsAdjustment(
     case 'breakout-watchlist':
       optionsAdjustment =
         options.gammaRegime === 'expansive'
-          ? Math.abs(options.optionsAdjustmentHint)
+          ? screen === 'breakout-watchlist'
+            ? Math.abs(options.optionsAdjustmentHint) * 0.85
+            : Math.abs(options.optionsAdjustmentHint)
           : options.gammaRegime === 'stabilizing'
-            ? -Math.abs(options.optionsAdjustmentHint)
+            ? screen === 'breakout-watchlist'
+              ? -Math.abs(options.optionsAdjustmentHint) * 1.1
+              : -Math.abs(options.optionsAdjustmentHint)
             : 0;
       break;
     case 'mean-reversion':
@@ -83,13 +91,13 @@ export function getOptionsAdjustment(
     case 'swing-setups':
       futuresAdjustment =
         options.futuresBuildup === 'long_buildup'
-          ? 2.5
+          ? 3
           : options.futuresBuildup === 'short_covering'
-            ? 1.5
+            ? 2
             : options.futuresBuildup === 'short_buildup'
-              ? -2.5
+              ? -3
               : options.futuresBuildup === 'long_unwinding'
-                ? -1.5
+                ? -2
                 : 0;
       break;
   }
@@ -113,6 +121,24 @@ export function getOptionsAdjustment(
     }
   }
 
+  if (options.nearAtmVolSkew !== null) {
+    if (screen === 'mean-reversion') {
+      optionsAdjustment += options.nearAtmVolSkew > 0 ? 0.8 : -0.5;
+    } else if (screen === 'intraday-momentum' || screen === 'breakout-watchlist') {
+      optionsAdjustment += screen === 'breakout-watchlist'
+        ? options.nearAtmVolSkew < 0 ? 0.4 : -0.9
+        : options.nearAtmVolSkew < 0 ? 0.7 : -0.6;
+    }
+  }
+
+  if (options.termStructureSlope !== null) {
+    if (screen === 'swing-setups' || screen === 'breakout-watchlist') {
+      optionsAdjustment += options.termStructureSlope > 0 ? 0.8 : -0.4;
+    } else if (screen === 'mean-reversion') {
+      optionsAdjustment += options.termStructureSlope > 0 ? -0.3 : 0.5;
+    }
+  }
+
   if (options.vannaRegime !== 'unavailable') {
     if (screen === 'intraday-momentum' || screen === 'breakout-watchlist') {
       optionsAdjustment += options.vannaRegime === 'supportive' ? 1 : options.vannaRegime === 'dragging' ? -1 : 0;
@@ -131,8 +157,10 @@ export function getOptionsAdjustment(
 
   optionsAdjustment += wallPenalty + futuresAdjustment;
 
+  const evidenceMultiplier = Math.sqrt(volSkewEvidenceMultiplier * gammaEvidenceMultiplier);
+
   return {
-    optionsAdjustment: Number(clamp(optionsAdjustment * calibration, -8, 8).toFixed(1)),
+    optionsAdjustment: Number(clamp(optionsAdjustment * calibration * evidenceMultiplier, -8, 8).toFixed(1)),
     optionsStructure: options,
   };
 }

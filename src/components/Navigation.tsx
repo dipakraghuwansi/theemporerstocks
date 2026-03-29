@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { CandlestickChart, BriefcaseBusiness, LineChart, ShieldCheck, ScanSearch, TableProperties, Rows3, Sigma, Database, RefreshCw, Microscope } from 'lucide-react';
+import { CandlestickChart, BriefcaseBusiness, LineChart, ShieldCheck, ScanSearch, SearchCheck, TableProperties, Rows3, Sigma, Database, RefreshCw, Microscope } from 'lucide-react';
 
 export default function Navigation() {
     const pathname = usePathname();
@@ -178,6 +178,17 @@ export default function Navigation() {
                 >
                     <Microscope className={`w-4 h-4 ${pathname === '/research' ? 'text-emerald-400' : ''}`} />
                     Research
+                </Link>
+
+                <Link
+                    href="/stock-lab"
+                    className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-bold transition-all ${pathname === '/stock-lab'
+                        ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)] border border-white/10'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                        }`}
+                >
+                    <SearchCheck className={`w-4 h-4 ${pathname === '/stock-lab' ? 'text-sky-400' : ''}`} />
+                    Stock Lab
                 </Link>
             </div>
             <div className="flex items-center gap-3">

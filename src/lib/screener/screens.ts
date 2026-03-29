@@ -19,16 +19,38 @@ function sortDrivers(contributions: ScreenerScoreContribution[]) {
   return [...contributions].sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact)).slice(0, 4);
 }
 
+function applyContributionCalibration(
+  screen: StockScreenType,
+  key: string,
+  rawImpact: number,
+  payload: ScreenerScorePayload
+) {
+  const calibration = payload.calibrationContext[screen];
+  const factorMultiplier = calibration?.factorMultipliers?.[key] ?? 1;
+  const baseMultiplier = calibration?.baseMultiplier ?? 1;
+  return Number((rawImpact * factorMultiplier * baseMultiplier).toFixed(1));
+}
+
 export function screenMatches(screen: StockScreenType, metrics: ScreenerBaseMetrics) {
   const factors = deriveScreenerFactors(metrics);
+  const supportiveMicrostructure =
+    metrics.micropriceEdgePct === null || metrics.rollingOfi === null
+      ? true
+      : metrics.micropriceEdgePct >= 0 && metrics.rollingOfi >= 0;
+  const acceptableToxicity = metrics.vpin === null || metrics.vpin < 0.7;
 
   switch (screen) {
     case 'intraday-momentum':
       return Boolean(
         metrics.aboveVwap &&
-          (factors.dayMoveAtr || 0) >= 0.35 &&
-          (metrics.volumeExpansion || 0) >= 1.2 &&
-          (metrics.relativeStrength20d || 0) > 0
+          (factors.dayMoveAtr || 0) >= 0.6 &&
+          (factors.vwapDistanceAtr || 0) >= 0.1 &&
+          (metrics.volumeExpansion || 0) >= 1.6 &&
+          (metrics.relativeStrength20d || 0) >= 0.4 &&
+          (metrics.residualAlpha20d || 0) >= 0 &&
+          (metrics.factorBasketAlpha20d || 0) >= 0 &&
+          supportiveMicrostructure &&
+          acceptableToxicity
       );
     case 'swing-setups':
       return Boolean(
@@ -123,45 +145,45 @@ export function getScreenerScoreBreakdown(
   switch (screen) {
     case 'intraday-momentum':
       contributions = [
-        { key: 'day_move', label: 'ATR Day Impulse', value: dayMoveScore, displayValue: dayMoveScore.toFixed(1), impact: Number((dayMoveScore * 0.32).toFixed(1)) },
-        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: Number((volumeScore * 0.24).toFixed(1)) },
-        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: Number((relativeStrengthScore * 0.2).toFixed(1)) },
-        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: Number((residualAlphaScore * 0.12).toFixed(1)) },
-        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: Number((factorBasketAlphaScore * 0.1).toFixed(1)) },
-        { key: 'vwap', label: 'VWAP Distance', value: vwapScore, displayValue: vwapScore.toFixed(1), impact: Number((vwapScore * 0.12).toFixed(1)) },
+        { key: 'day_move', label: 'ATR Day Impulse', value: dayMoveScore, displayValue: dayMoveScore.toFixed(1), impact: applyContributionCalibration(screen, 'day_move', dayMoveScore * 0.32, payload) },
+        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: applyContributionCalibration(screen, 'volume', volumeScore * 0.24, payload) },
+        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: applyContributionCalibration(screen, 'relative_strength', relativeStrengthScore * 0.2, payload) },
+        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'residual_alpha', residualAlphaScore * 0.12, payload) },
+        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'factor_alpha', factorBasketAlphaScore * 0.1, payload) },
+        { key: 'vwap', label: 'VWAP Distance', value: vwapScore, displayValue: vwapScore.toFixed(1), impact: applyContributionCalibration(screen, 'vwap', vwapScore * 0.12, payload) },
         { key: 'vwap_state', label: 'VWAP State', value: metrics.aboveVwap ? 1 : 0, displayValue: metrics.aboveVwap ? 'Above' : 'Below', impact: metrics.aboveVwap ? 5 : -6 },
       ];
       break;
     case 'swing-setups':
       contributions = [
-        { key: 'sma20_trend', label: 'SMA20 Trend', value: sma20TrendScore, displayValue: sma20TrendScore.toFixed(1), impact: Number((sma20TrendScore * 0.24).toFixed(1)) },
-        { key: 'sma50_trend', label: 'SMA50 Trend', value: sma50TrendScore, displayValue: sma50TrendScore.toFixed(1), impact: Number((sma50TrendScore * 0.18).toFixed(1)) },
-        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: Number((relativeStrengthScore * 0.2).toFixed(1)) },
-        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: Number((residualAlphaScore * 0.12).toFixed(1)) },
-        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: Number((factorBasketAlphaScore * 0.12).toFixed(1)) },
-        { key: 'breakout', label: 'Breakout Proximity', value: breakoutScore, displayValue: breakoutScore.toFixed(1), impact: Number((breakoutScore * 0.22).toFixed(1)) },
-        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: Number((volumeScore * 0.14).toFixed(1)) },
+        { key: 'sma20_trend', label: 'SMA20 Trend', value: sma20TrendScore, displayValue: sma20TrendScore.toFixed(1), impact: applyContributionCalibration(screen, 'sma20_trend', sma20TrendScore * 0.24, payload) },
+        { key: 'sma50_trend', label: 'SMA50 Trend', value: sma50TrendScore, displayValue: sma50TrendScore.toFixed(1), impact: applyContributionCalibration(screen, 'sma50_trend', sma50TrendScore * 0.18, payload) },
+        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: applyContributionCalibration(screen, 'relative_strength', relativeStrengthScore * 0.2, payload) },
+        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'residual_alpha', residualAlphaScore * 0.12, payload) },
+        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'factor_alpha', factorBasketAlphaScore * 0.12, payload) },
+        { key: 'breakout', label: 'Breakout Proximity', value: breakoutScore, displayValue: breakoutScore.toFixed(1), impact: applyContributionCalibration(screen, 'breakout', breakoutScore * 0.22, payload) },
+        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: applyContributionCalibration(screen, 'volume', volumeScore * 0.14, payload) },
       ];
       break;
     case 'mean-reversion':
       contributions = [
-        { key: 'rsi_reversal', label: 'RSI Reversal', value: meanReversionRsiScore, displayValue: meanReversionRsiScore.toFixed(1), impact: Number((meanReversionRsiScore * 0.34).toFixed(1)) },
-        { key: 'gap_reversal', label: 'Gap Stretch', value: meanReversionGapScore, displayValue: meanReversionGapScore.toFixed(1), impact: Number((meanReversionGapScore * 0.26).toFixed(1)) },
-        { key: 'sma20_stretch', label: 'SMA20 Stretch', value: meanReversionStretchScore, displayValue: meanReversionStretchScore.toFixed(1), impact: Number((meanReversionStretchScore * 0.24).toFixed(1)) },
-        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: Number((residualAlphaScore * 0.12).toFixed(1)) },
-        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: Number((factorBasketAlphaScore * 0.1).toFixed(1)) },
-        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: Number((volumeScore * 0.16).toFixed(1)) },
+        { key: 'rsi_reversal', label: 'RSI Reversal', value: meanReversionRsiScore, displayValue: meanReversionRsiScore.toFixed(1), impact: applyContributionCalibration(screen, 'rsi_reversal', meanReversionRsiScore * 0.34, payload) },
+        { key: 'gap_reversal', label: 'Gap Stretch', value: meanReversionGapScore, displayValue: meanReversionGapScore.toFixed(1), impact: applyContributionCalibration(screen, 'gap_reversal', meanReversionGapScore * 0.26, payload) },
+        { key: 'sma20_stretch', label: 'SMA20 Stretch', value: meanReversionStretchScore, displayValue: meanReversionStretchScore.toFixed(1), impact: applyContributionCalibration(screen, 'sma20_stretch', meanReversionStretchScore * 0.24, payload) },
+        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'residual_alpha', residualAlphaScore * 0.12, payload) },
+        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'factor_alpha', factorBasketAlphaScore * 0.1, payload) },
+        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: applyContributionCalibration(screen, 'volume', volumeScore * 0.16, payload) },
       ];
       break;
     case 'breakout-watchlist':
       contributions = [
-        { key: 'breakout', label: 'Breakout Proximity', value: breakoutScore, displayValue: breakoutScore.toFixed(1), impact: Number((breakoutScore * 0.34).toFixed(1)) },
-        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: Number((volumeScore * 0.22).toFixed(1)) },
-        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: Number((relativeStrengthScore * 0.18).toFixed(1)) },
-        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: Number((residualAlphaScore * 0.12).toFixed(1)) },
-        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: Number((factorBasketAlphaScore * 0.12).toFixed(1)) },
-        { key: 'day_move', label: 'ATR Day Impulse', value: dayMoveScore, displayValue: dayMoveScore.toFixed(1), impact: Number((dayMoveScore * 0.14).toFixed(1)) },
-        { key: 'sma20_trend', label: 'SMA20 Trend', value: sma20TrendScore, displayValue: sma20TrendScore.toFixed(1), impact: Number((sma20TrendScore * 0.1).toFixed(1)) },
+        { key: 'breakout', label: 'Breakout Proximity', value: breakoutScore, displayValue: breakoutScore.toFixed(1), impact: applyContributionCalibration(screen, 'breakout', breakoutScore * 0.34, payload) },
+        { key: 'volume', label: 'Volume Expansion', value: volumeScore, displayValue: volumeScore.toFixed(1), impact: applyContributionCalibration(screen, 'volume', volumeScore * 0.22, payload) },
+        { key: 'relative_strength', label: 'Relative Strength', value: relativeStrengthScore, displayValue: relativeStrengthScore.toFixed(1), impact: applyContributionCalibration(screen, 'relative_strength', relativeStrengthScore * 0.18, payload) },
+        { key: 'residual_alpha', label: 'Residual Alpha', value: residualAlphaScore, displayValue: residualAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'residual_alpha', residualAlphaScore * 0.12, payload) },
+        { key: 'factor_alpha', label: 'Factor Basket Alpha', value: factorBasketAlphaScore, displayValue: factorBasketAlphaScore.toFixed(1), impact: applyContributionCalibration(screen, 'factor_alpha', factorBasketAlphaScore * 0.12, payload) },
+        { key: 'day_move', label: 'ATR Day Impulse', value: dayMoveScore, displayValue: dayMoveScore.toFixed(1), impact: applyContributionCalibration(screen, 'day_move', dayMoveScore * 0.14, payload) },
+        { key: 'sma20_trend', label: 'SMA20 Trend', value: sma20TrendScore, displayValue: sma20TrendScore.toFixed(1), impact: applyContributionCalibration(screen, 'sma20_trend', sma20TrendScore * 0.1, payload) },
       ];
       break;
   }

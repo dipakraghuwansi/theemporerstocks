@@ -5,7 +5,7 @@ import { getKiteInstance } from '@/lib/kiteHelper';
 export async function GET(request: NextRequest) {
     try {
         const sync = request.nextUrl.searchParams.get('sync');
-        let positions = getPositions();
+        let positions = await getPositions();
 
         if (sync === 'true') {
             const token = request.cookies.get('kite_access_token')?.value;
@@ -30,14 +30,14 @@ export async function GET(request: NextRequest) {
                             if (kiteQtyMap[symbol] === 0 || kiteQtyMap[symbol] === undefined) {
                                 // Double check if it was missing because we never actually placed it?
                                 // If undefined, it means no position exists for it in Kite today. SQUARED_OFF.
-                                updatePositionStatus(p.id, 'CLOSED_MANUAL');
+                                await updatePositionStatus(p.id, 'CLOSED_MANUAL');
                                 changed = true;
                             }
                         }
                     }
 
                     if (changed) {
-                        positions = getPositions(); // Refresh virtual store
+                        positions = await getPositions(); // Refresh virtual store
                     }
                 } catch (e: any) {
                     console.error("Native Kite position sync failed:", e.message);
@@ -59,7 +59,7 @@ export async function PATCH(request: Request) {
             return NextResponse.json({ error: 'Missing id or status' }, { status: 400 });
         }
 
-        updatePositionStatus(id, status);
+        await updatePositionStatus(id, status);
 
         return NextResponse.json({ success: true, message: `Position ${id} updated to ${status}` });
     } catch (error: any) {
